@@ -11,4 +11,3 @@ realizar e documentar contribuições para o projeto open source [nushell](https
 - [Pull Request implementando bacgrkound jobs](https://github.com/nushell/nushell/pull/14883) - Já mergeada =]
 - [Pull Request experimental de inter-job communication](https://github.com/nushell/nushell/pull/15253) - Em desenvolvimento
 - [Explicação dos testes da PR de jobs](/tests.md)
-- [Relatórios semanais](/reports/reports.md)
