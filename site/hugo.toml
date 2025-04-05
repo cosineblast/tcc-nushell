@@ -1,0 +1,7 @@
+baseURL = 'https://linux.ime.usp.br/~figurantpp/mac499/'
+languageCode = 'pt-br'
+title = 'Trabalho de Formatura'
+theme = 'terminal'
+
+[params.logo]
+logoText = "TCC"
