@@ -1,6 +1,5 @@
 +++
 date = '2025-04-05T12:53:20-03:00'
-draft = true
 title = ''
 +++
 
@@ -15,11 +14,11 @@ será atualizada ao decorrer de 2025 com informações e atualizações sobre o 
 
 ## Proposta
 
-Nushell é um shell de código aberto moderno desenvolvido com o objetivo de providenciar uma 
+Nushell é um shell de código aberto moderno desenvolvido com o objetivo de providenciar uma
 experiência multiplataforma elegante e amigável.
-Este shell adota o uso de dados estruturados em seus comandos, 
-permitindo que dados possam ser manipulados de acordo com seus tipos apropriados, 
-sem a necessidade de conversões de texto para a composição de operações, 
+Este shell adota o uso de dados estruturados em seus comandos,
+permitindo que dados possam ser manipulados de acordo com seus tipos apropriados,
+sem a necessidade de conversões de texto para a composição de operações,
 como ocorre em shells POSIX como bash, zsh e fish.
 
 Desde sua introdução em 2019, a feature mais solicitada do projeto foi a adição de _background
@@ -40,9 +39,9 @@ Em desenvolvimento...
 
 ## Contribuições Realizadas
 
-- [X] Pull Request [#14883](https://github.com/nushell/nushell/pull/14883): 
+- [X] Pull Request [#14883](https://github.com/nushell/nushell/pull/14883):
 Implementação de background jobs e Ctrl-Z (Unix)
 - [ ] Pull Request [#15253](https://github.com/nushell/nushell/pull/15253): Implementação de comunicação
-entre threads 
+entre threads
 - [ ] Pull Request #????: Adição de nomes a jobs
 - [ ] Pull Request #????: Adição de um comando `job dispatch`

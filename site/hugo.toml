@@ -1,7 +1,5 @@
 baseURL = 'https://linux.ime.usp.br/~figurantpp/mac499/'
+# baseURL = 'https://example.org/'
 languageCode = 'pt-br'
 title = 'Trabalho de Formatura'
-theme = 'terminal'
-
-[params.logo]
-logoText = "TCC"
+theme = 'PaperMod'
