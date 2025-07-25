@@ -34,8 +34,8 @@ Em desenvolvimento...
 
 ## Relatórios
 
-- [16/3 - 22/3](./reports/march_22)
-- [23/3 - 6/1](./reports/april_6)
+- [16/3 - 22/3](./posts/march22/)
+- [23/3 - 6/1](./posts/april6/)
 
 ## Contribuições Realizadas
 

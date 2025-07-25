@@ -1,3 +1,8 @@
++++
+title = 'Relatório TCC'
+date = '2025-04-05T12:53:20-03:00'
+draft = false
++++
 
 # Relatório de progresso de TCC: 16/3 - 22/3
 
