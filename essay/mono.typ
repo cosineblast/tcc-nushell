@@ -25,7 +25,7 @@
   [
     #text(17pt)[ MONOGRAFIA FINAL ]
 
-    #text(17pt)[ MAC0499 - TRABALHO DE FORMATURA SUPERVISIONADO ]
+    #text(17pt)[ MAC0499 -- TRABALHO DE FORMATURA SUPERVISIONADO ]
   ],
   [
     #text(17pt)[ Supervisor: Alfredo Goldman ]
@@ -41,24 +41,21 @@
   ]
 )
 
+#set align(start + top)
+#set par(justify: true)
+
 #pagebreak()
 #pagebreak()
+
 
 #let my_summary_page(title: [], reference: [], description: [], keywords: []) = [
 
-  #set align(center)
-
+  #align(center)[
   #text(17pt)[ #title ]
-
-  #set align(start + top)
+  ]
 
   // TODO: find how to increase margin of this section 
-
   #reference
-
-  #set par(
-    justify: true
-  )
 
   #description
 
@@ -124,19 +121,13 @@ On top of multithreading, background jobs and process suspension, Erlang-style m
 
 #pagebreak()
 
-#set align(start + top)
-
-#set par(
-  justify: true
-)
-
-Sumário
+= Sumário
 
 ...
 
 #pagebreak()
 
-  Capitulo 1
+= Capitulo 1
 = Introdução
 
 == Contextualização
@@ -155,9 +146,8 @@ um recurso ubíquo é a capacidade de concatenar a saída textual de um comando,
  na entrada textual de outro comando, permitindo variadas manipulações textuais.
 
 
-// TODO: use proper hyphen here, instead of dash
-Neste tipo de shell, não existe estrutura geral fixa para as entradas e saídas dos comandos - cada um
-com suas própias convenções sobre o formato textual dos dados - é comum se referir a este como um modelo de dados não estruturados.
+Neste tipo de shell, não existe estrutura geral fixa para as entradas e saídas dos comandos -- cada um
+com suas própias convenções sobre o formato textual dos dados -- é comum se referir a este como um modelo de dados não estruturados.
 
 Em particular, é comum o uso de textos representando tabelas neste modelo, onde as linhas das tabelas são separadas
 pelos caracteres de quebra de linha textuais (também conhecido por "\\n"), e as colunas das tabelas são separadas por quantidades variadas
@@ -168,9 +158,8 @@ Em shells, a maneira natural de se resolver este problema é com o uso de divers
 um para cada operação a ser realizada (i.e listar arquivos, filtrar, ordenar).
 Primeiro, pode ser utilizado o comando `ls -l` para listar os arquivos diponíveis do sistema em um texto no formato de tabela.
 
-// TODO: use figure here
 
-#set align(center)
+#figure([
 ```
 total 7648
 -rw-r--r-- 1 ron ron 6152457 Jan 24 16:03 '2025-01-24 16-03-20.mkv'
@@ -182,9 +171,10 @@ total 7648
 -rw-r--r-- 1 ron ron     245 Jan 14 12:53  todo
 -rw-r--r-- 1 ron ron  168611 Feb 16 00:15  weird_circuit.png
 ```
-Figura 1: Exemplo de saída do comando `ls -l`.
+],
+  caption: [ Exemplo de saída do comando `ls -l`. ]
+) <ls_dash_l>
 
-#set align(start + top)
 
 
 Na saída do `ls -l`, como a coluna que representa o tamanho dos arquivos _aparenta_ ser a quinta
@@ -202,16 +192,13 @@ Podemos realizar este filtro específico com o comando `awk '$5 > 1024'`.
 
 Conectando todos estes comandos com o operador de composição de comandos de shells, o símbolo _pipe_ '`|`', obtemos a seguinte _pipeline_:
 
-#set align(center)
+#align(center)[
 ```bash
 ls -l  | sort -k5 -n | awk '$5 > 1024'
 ```
-#set align(start + top)
+]
 
-
-
-// TODO: use figure here
-#set align(center)
+#figure([
 ```
 -rw-r--r-- 1 ron ron  168611 Feb 16 00:15 weird_circuit.png
 -rw-r--r-- 1 ron ron  421037 Jan 24 16:49 last.png
@@ -219,8 +206,9 @@ ls -l  | sort -k5 -n | awk '$5 > 1024'
 -rw-r--r-- 1 ron ron  587203 Jan 24 16:22 bam.png
 -rw-r--r-- 1 ron ron 6152457 Jan 24 16:03 2025-01-24 16-03-20.mkv
 ```
-Figura 2: Exemplo de saída da pipeline `ls -l  | sort -k5 -n | awk '$5 > 1024'`
-#set align(start + top)
+],
+caption: [ Exemplo de saída da pipeline `ls -l  | sort -k5 -n | awk '$5 > 1024'` ]
+) <posix_pipeline>
 
 
 Alternativamente, poderia ter sido utilizada a _flag_ `-S` do comando `ls`,
@@ -244,12 +232,11 @@ Em nushell, os comandos implementados pelo shell não recebem ou devolvem exclus
 inteiros, tabelas, booleanas e datas. Apesar destes valores não serem textos em sua natureza, todos estes possuem alguma forma de representação
 gráfica que pode ser mostrada aos usuários na saída dos comandos.
 
-Esta diferença fundamental pode ser observada até no mais básico dos comandos. Por exemplo, na Figura 3, podemos ver a representação gráfica da
+Esta diferença fundamental pode ser observada até no mais básico dos comandos. Por exemplo, na @nushell_ls, podemos ver a representação gráfica da
 saída do comando `ls`, que devolve um valor de tipo tabela contendo as informações dos arquivos da pasta atual,
 com colunas propriamente nomeadas.
 
-// TODO use figure
-#set align(center)
+#figure([
 
 ```
 ┏━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━┓
@@ -265,30 +252,30 @@ com colunas propriamente nomeadas.
 ┃ 7 ┃ weird_circuit.png       ┃ file ┃ 168.6 kB ┃ 2 weeks ago  ┃
 ┗━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━┛
 ```
+],
 
-Figura 3: Representação gráfica da tabela devolvida pelo comando `ls`. As colunas `name` e `type` guardam valores de tipo `string`,
-enquanto as colunas `size` e `modified` guardam valores do tipo `filesize` e `date` respectivamente.
+caption: [ Representação gráfica da tabela devolvida pelo comando `ls`. As colunas `name` e `type` guardam valores de tipo `string`,
+enquanto as colunas `size` e `modified` guardam valores do tipo `filesize` e `date` respectivamente. ]
+) <nushell_ls>
 
-#set align(start + top)
+
 
 Essa diferença estrutural se manifesta mais explicitamente com o uso de operações para manipular tais tabelas.
 Em nushell, o problema mencionado anteriormente (listar os arquivos da pasta atual acima de 1kb ordenados por tamanho)
 pode ser resolvido com a seguinte _pipeline_:
 
-#set align(center)
-
-```bash
+#align(center)[
+  ```bash
 ls | where size > 1kb | sort-by size
 ```
-
-#set align(start + top)
+]
 
 Nessa pipeline, o comando `where` recebe uma tabela, e remove as linhas que não satisfazem a condição especificada, e o
-comando `sort-by` ordena as linhas da tabela em ordem crescente pela coluna `size`, obtendo uma outra tabela como na Figura 4.
+comando `sort-by` ordena as linhas da tabela em ordem crescente pela coluna `size`, obtendo uma outra tabela como na @nushell_pipeline.
 Como a coluna `size` é do tipo `filesize`, e o comando `sort-by` ordena os valores da coluna respeitando seus tipos, não há
 problemas em relação a comparação dos tamanhos arquivos como strings.
 
-#set align(center)
+#figure([
 ```
 ┏━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ # ┃          name           ┃ type ┃   size   ┃  modified   ┃
@@ -300,8 +287,9 @@ problemas em relação a comparação dos tamanhos arquivos como strings.
 ┃ 4 ┃ 2025-01-24 16-03-20.mkv ┃ file ┃   6.1 MB ┃ a month ago ┃
 ┗━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━┛
 ```
-Figura 4: Saída da _pipeline_ `ls | where size > 1kb | sort-by size`.
-#set align(start + top)
+],
+caption: [ Saída da _pipeline_ `ls | where size > 1kb | sort-by size`. ]
+) <nushell_pipeline>
 
 A solução em nushell é argumentavelmente mais simples e legível que a solução POSIX. Este modelo permite que operações complexas
 possam ser expressas sem a necessidade de interpretadores complexos adicionais como `awk`. Adicionalmente, como não
