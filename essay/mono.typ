@@ -17,7 +17,7 @@
   ]
   ,
   [
-    #text(17pt)[ *Implementando tarefas em segundo plano em um shell inusitado* ]
+    #text(17pt)[ *Implementando tarefas em segundo plano em um shell moderno* ]
 
     #text(14pt)[ Renan Ribeiro Marcelino ]
   ]
@@ -69,7 +69,7 @@
   title: [ *Resumo* ],
   reference: [
     
-Renan Ribeiro Marcelino. *Implementando tarefas de segundo plano em um shell inusitado*. Monografia (Bacharelado).
+Renan Ribeiro Marcelino. *Implementando tarefas de segundo plano em um shell moderno*. Monografia (Bacharelado).
 Instituto de Matemática e Estatística, Universidade de São Paulo, São Paulo, 2025.
   ],
   description: [
@@ -102,8 +102,7 @@ insiprado no modelo implementado pela linguagem de programação Erlang.
   title: [ *Abstract* ],
   reference: [
     
-    // TODO: find a nicer english adjective for 'inusitado' (currently 'quirky') here.
-Renan Ribeiro Marcelino. *Implementing background jobs in a quirky shell*. Capstone Project Report (Bachelor).
+Renan Ribeiro Marcelino. *Implementing background jobs in a modern shell*. Capstone Project Report (Bachelor).
  Institute of Mathematics and Statistics, University of São Paulo, São Paulo, 2025.
 ],
   description: [
