@@ -1,6 +1,7 @@
 
-#set text(lang: "pt", region: "br")
-#set quote(block: true)
+#import "stuff.typ": template
+
+#show: template
 
 #set align(center)
 
@@ -55,8 +56,9 @@
   #text(17pt)[ #title ]
   ]
 
-  // TODO: find how to increase margin of this section 
+  #block(inset: (left: 1.5cm, right: 1.5cm))[
   #reference
+  ]
 
   #description
 
@@ -129,11 +131,11 @@ On top of multithreading, background jobs and process suspension, Erlang-style m
 #pagebreak()
 
 = Capitulo 1
+
+
 = Introdução
 
-== Contextualização
 
-=== Shells Tradicionais
 
 O terminal de texto é uma interface de interação entre humanos e computadores frequentemente
 utilizada por usuários técnicos nos dias modernos em computadores desktop e servidores remotos.
@@ -221,7 +223,7 @@ Como pode ser visto, a solução deste simples problema em POSIX envolve
 - Interpretadores de linguagens de programação de manipulação de texto como `awk`
 - Tratamento de conversão numérica-textual no `sort`
 
-=== Nushell
+== Nushell
 
 Nushell é um shell moderno desenvolvido com o objetivo de providenciar uma experiência
 multiplataforma e amigável.
@@ -311,7 +313,7 @@ I'm a programmer by trade, but in my current position I wander around a lot. Som
 One of the big things I've noticed help keep things manageable is that the command names and keywords are pretty much all in natural language. Abbreviations are an exception, which means it's quite easy to read and understand. To illustrate, I was able to teach some people who don't have any programming experience how to get started, and they told me after the fact it was the "programming intuition" they were missing. As in, they had a hard time visualizing what needed to happen in other to solve the problem, but they barely felt Nushell was another obstacle to overcome, since it's all relatively self-documenting.
 ]
 
-=== Ausência de tarefas de segundo plano no nushell
+== Motivação
 
 Por padrão, quando um usuário inicia um comando em um shell, o agente fica incapaz de
 interagir com a interface até que o comando termine sua execução.
@@ -356,10 +358,8 @@ Visando a demanda por estes recursos no projeto, e a relevância deste shell,
 este trabalho acadêmico consiste na implementação e integração destes dois recursos
  no projeto nushell.
 
+#pagebreak()
+
 = Capitulo 2
 = Desenvolvimento
-
-
-
-
 
