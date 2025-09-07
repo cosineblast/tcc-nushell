@@ -1,4 +1,5 @@
 
+#set text(lang: "pt", region: "br")
 #set quote(block: true)
 
 #set align(center)
