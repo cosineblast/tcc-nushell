@@ -363,3 +363,59 @@ este trabalho acadêmico consiste na implementação e integração destes dois 
 = Capitulo 2
 = Desenvolvimento
 
+// Um resumo geral do que foi feito, quantas contribuições foram realizadas
+
+== Planejamento
+
+- Analisando o solicitado, temos 4 requisitos:
+1. Permitir que processos seja iniciados em segundo plano
+2. Permitir que código tradicional nushell seja executando em segundo plano
+3. Permitir Ctrl-Z
+4. Adicionar comunicação entre tarefas de segundo plano
+
+- Tudo feito no começo do ano
+- Inicialmente planejado para uma PR só, mas divido em duas
+- O item 4 não foi exatamente solicitado, mas eu achei uma boa ideia
+
+== Primeira PR (14883)
+
+A primeira e principal _pull request_
+- Proposta inicial da contribuição
+. Background jobs, por meio de threads
+. Background jobs, por processos separados
+. Comunicação entre threads por meio de communicating sequential processes
+
+// Dúvida: Vale mais a pena documentar as coisas como foram feitas, ou será que é melhor documentar o resultado final?
+// Acho que vou falar das coisas na ordem que foram implementadas,  mas falar dos designs finais desses recursos implementados,
+// e salientar mudanças de design importantes, como CSP vs Actor Model.
+- Alterações implementadas:
+
+. Spawn de jobs:
+Falar de closures, da struct EngineState, comandos experimentais, e do comando `job spawn`, e tratamento de erros.
+falar de como posteriormente, o job spawn foi modificado para que este retorne o id do job spawnado.
+
+. Listagem de jobs
+Falar da tabela de jobs, salva por um mutex compartilhado entre as `EngineState`s, falar do modelo de exclusão de acesso da linguagem Rust.
+Falar de como o id do primeiro job é o zero.
+
+. Assasinato de jobs
+Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
+que falta da falta da documentação desse detalhe.
+
+. TSTP e Ctrl-Z
+Falar do manual da GNU que eu li, quais syscalls foram usadas, UnfreezeHandle etc.
+Falar de process groups, e do commit (per-pipelines)[https://github.com/nushell/nushell/pull/14883/commits/267b092c7954b2100df0fdab3b6ef9668aeee240].
+
+. Saída do program e aviso na saída
+Falar de como foi implementado o esquema de avisar o usuário se ele tentar sair do shell enquanto tem algum job na tabela.
+Falar de como o programa se comporta quando o shell termina e ainda tem jobs rodando (matar ou não matar os processos?)
+Falar de como o programa não mostra a saída dos procesoss por padrão, mas ainda permite que comandos que explicitamente printam coisas na tela funcionem (print).
+
+. Alterações que sairam de escopo
+Falar da ideia do `job dispatch`, de como ele é mais ou menos desncessário (job spawn meio que serve)
+
+= Capítulo 3
+= Resultado e Impacto
+
+Falar de como o projeto foi bem vindo, e falar de depoimentos e agradecimentos que a galera no github e discord falou da contribuição.
+
