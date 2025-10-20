@@ -1,4 +1,7 @@
 
+#let fixme(thing) = thing
+#let towork(thing) = thing
+
 #import "stuff.typ": template
 
 #show: template
@@ -365,25 +368,116 @@ este trabalho acadêmico consiste na implementação e integração destes dois 
 
 // Um resumo geral do que foi feito, quantas contribuições foram realizadas
 
-== Planejamento
+== Implementação
 
-- Analisando o solicitado, temos 4 requisitos:
-1. Permitir que processos seja iniciados em segundo plano
-2. Permitir que código tradicional nushell seja executando em segundo plano
-3. Permitir Ctrl-Z
-4. Adicionar comunicação entre tarefas de segundo plano
+O projeto nushell é #fixme[hosteado] na plataforma
+#link("https://en.wikipedia.org/wiki/GitHub")[GitHub], #fixme[onde]
+a unidade fundamental de contribuição é denominada _Pull Request_ (PR).
+A convenção do quão grande deve ser uma pull request varia de projeto a projeto.
+No nushell, a convenção é a implementação de um recurso por pull request, a menos
+que esse recurso possa ser divido apropriadamente em atualizações menores.
 
-- Tudo feito no começo do ano
-- Inicialmente planejado para uma PR só, mas divido em duas
-- O item 4 não foi exatamente solicitado, mas eu achei uma boa ideia
+O desenvolvimento deste trabalho aconteceu por meio de múltiplas pull requests, realizadas
+durante os mêses de janeiro e fevereiro de 2025.
 
-== Primeira PR (14883)
 
+== Pull Request \#14883 - Jobs
+
+// marcador para partes do texto que ainda precisam de trabalho.
+
+/*
 A primeira e principal _pull request_
 - Proposta inicial da contribuição
 . Background jobs, por meio de threads
 . Background jobs, por processos separados
 . Comunicação entre threads por meio de communicating sequential processes
+*/
+
+
+
+A principal contribuição realizada neste trabalho consiste na  _Pull Request_ _\#14883_, `Jobs`.
+Esta PR tinha no início, o objetivo de implementar os seguintes recursos:
+
+=== 1. Tarefas em segundo plano, por meio de threads.
+Um dos requisitos para esta implementação, é capacidade de tarefas de segundo plano 
+de executar código nushell e fazer computações, além de simplemente executar programas em segundo plano.
+Como exemplo, o código abaixo em `bash` utiliza do recurso deste shell de realizar operações
+aritméticas, para computar o resultado da expressão 10+20, e salvar este em um arquivo `result.txt`,
+por meio de um background job.
+
+```bash
+(let result=10+20; echo $result > result.txt) &
+sleep 1
+cat result.txt
+```
+
+Para dar suporte a este recurso, o a implementação realizada neste trabalho
+utiliza de threads para implementar
+tarefas de segundo plano, ou seja, cada job é definido por uma thread distinta.
+
+Em sistemas operacionais POSIX, uma alternativa é a utilização da _syscall_ `fork` para
+iniciar uma cópia do processo atual, ao invés de iniciar uma nova thread. É desta forma,
+que atividades em segundo plano são implementadas em shells tradicionais.
+Isto não é uma opção viável para o projeto nushell, pois este é multiplataforma,
+e não existe nenhuma _syscall_ equivalente a esta
+no sistema operacional Windows. Logo, o modelo de implementação de tarefas em segundo
+plano escolhido foi o de threads.
+
+O código abaixo em nushell replica o comportamento do código bash apresentado acima.
+
+```bash
+job spawn { let result = 10 + 20; $result | save result.txt }
+sleep 1sec
+open result.txt
+```
+
+// TODO: fazer ilustrações mostrando a diferença entre os dois modelos
+
+=== 2. Tarefas em segundo plano baseadas em processos
+
+Shells tradicionais mantém registro de todas as tarefas de segundo plano iniciadas,
+para, por exemplo, que o usuário do shell possa se informar de quais jobs ainda estão executando,
+e avisar se o usuário tentar terminar o shell enquanto algum job ainda está em andamento.
+Entretanto, caso o usuário queira iniciar um processo em segundo plano, e não queira que o shell
+mantenha registro deste processo, shells POSIX permitem que o shell remova os
+registros internos de um processo em segundo plano, por meio do comando `disown`.
+
+Além de tarefas em segundo plano baseadas em threads, a primeira PR também planejava
+permitir que os usuários iniciassem processos específicos em segundo plano sem que
+o shell mantenha registro destes processos, equivalente a executar `disown` após
+inicar o processo. Esta tarefa foi determinada como fora do escopo da implementação
+inicial, e não implementada. A issue #link("https://github.com/nushell/nushell/issues/15200")[\#15200]
+do projeto foi criada para representar a demanda por este recurso.
+
+=== 3. Comunicação entre threads por meio de communicating sequential processes
+
+A escolha de threads para a implementação de background jobs abre oportunidades
+para a adição de mecanismos de comunicação entre threads, para que scripts nushell
+possam sicronizar e orquestrar algorimos complexos envolvendo múltiplas threads.
+
+Para orquestrar isso, a ideia inicial da PR era a implementação de comunicação entre threads
+por meio do modelo de interação concorrente
+#link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
+  Communicating Sequantial Processes
+] (CSP),
+que inspirou também as implementações das linguagens `Go`, `Rust`, e `Clojure`.
+
+A ideia inicial, consistia na criação de comandos `channel make`, `channel send`, `channel recv` e `chanel close`,
+que permitiriam a operação de objetos denominados canais, que se comportam como filas com garantias de sincronização.
+Considerando a complexidade já existente da PR, este recurso foi deixado para ser implementado
+em outra Pull Request, a PR \#15253 - "Inter-Job Direct Messaging".
+
+Isto não foi solicitado diretamente nas issues do projeto, mas o autor considerou que este
+tipo de recurso poderia ser útil para o desenvolvimento de scripts complexos.
+
+=== 4. Ctrl-Z em POSIX
+
+Os sistemas operacionais POSIX possuem o conceito de #link("https://en.wikipedia.org/wiki/Signal_(IPC)")[sinais],
+mensagens instantâneas numéricas predeterminadas que podem ser enviadas de um processo para outro.
+
+=== Detalhes de Implementação da PR
+
+...
 
 // Dúvida: Vale mais a pena documentar as coisas como foram feitas, ou será que é melhor documentar o resultado final?
 // Acho que vou falar das coisas na ordem que foram implementadas,  mas falar dos designs finais desses recursos implementados,
@@ -414,8 +508,17 @@ Falar de como o programa não mostra a saída dos procesoss por padrão, mas ain
 . Alterações que sairam de escopo
 Falar da ideia do `job dispatch`, de como ele é mais ou menos desncessário (job spawn meio que serve)
 
+== Pull Request  \#15253 - "Inter-Job Direct Messaging"
+
+// Falar bla bla bla detalhes Erlang.
+
 = Capítulo 3
 = Resultado e Impacto
 
 Falar de como o projeto foi bem vindo, e falar de depoimentos e agradecimentos que a galera no github e discord falou da contribuição.
 
+
+// glossário:
+// PR - Pull Request
+// TODO: adicionar termos em inglês
+// TODO: deixar claro a interoperabilidade de tarefa de segundo plano, background job, job
