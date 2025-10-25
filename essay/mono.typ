@@ -86,7 +86,9 @@ Desde sua criação em 2019, o projeto possui solicitações para o suporte à t
 comuns em shells POSIX.
 Este projeto de de trabalho de conclusão de curso consiste na implementação e documentação de uma infraestrutura de tarefas de segundo plano no projeto nushell.
 Além de tarefas em segundo plano por meio de multithreading e suspensão de processos, também foi implementado um sistema de comunicação entre threads
-insiprado no modelo implementado pela linguagem de programação Erlang.
+insiprado no modelo implementado pela linguagem de programação Erlang. Ao todo, foram
+adicionados dez comandos novos para o shell, além de melhorias no comportamento do projeto
+em Linux e MacOS.
     
   ],
   keywords: [
@@ -119,6 +121,7 @@ Ever since its inception in 2019, the project has been requested to implement ba
 
 This project consists in the implementation, documentation and integration of a background job infrastructure in nushell
 On top of multithreading, background jobs and process suspension, Erlang-style message passing was also implemented.
+TODO: Update this description to match the portuguese one.
   ],
   keywords: [
   *Keywords*: Shell, Background jobs.
@@ -449,33 +452,56 @@ inicar o processo. Esta tarefa foi determinada como fora do escopo da implementa
 inicial, e não implementada. A issue #link("https://github.com/nushell/nushell/issues/15200")[\#15200]
 do projeto foi criada para representar a demanda por este recurso.
 
-=== 3. Comunicação entre threads por meio de communicating sequential processes
+=== 3. Comunicação entre threads por meio de _Communicating Sequential Processes_
 
-A escolha de threads para a implementação de background jobs abre oportunidades
-para a adição de mecanismos de comunicação entre threads, para que scripts nushell
-possam sicronizar e orquestrar algorimos complexos envolvendo múltiplas threads.
+A escolha de threads para a implementação de background jobs abre oportunidade
+para a adição de mecanismos de comunicação entre threads à linguagem, para permitir
+que tarefas em segundo plano possam comunicar entre si, permitindo que scripts em nushell
+possam implementar algorítmos paralelos.
 
-Para orquestrar isso, a ideia inicial da PR era a implementação de comunicação entre threads
+Para permitir isso, umas das ideias iniciasi da PR era a implementação de comunicação entre threads
 por meio do modelo de interação concorrente
 #link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
   Communicating Sequantial Processes
-] (CSP),
+] (CSP), de Tony Hoare,
 que inspirou também as implementações das linguagens `Go`, `Rust`, e `Clojure`.
 
-A ideia inicial, consistia na criação de comandos `channel make`, `channel send`, `channel recv` e `chanel close`,
+A ideia inicial, consistia na criação de comandos `channel make`, `channel send`, `channel recv` e `channel close`,
 que permitiriam a operação de objetos denominados canais, que se comportam como filas com garantias de sincronização.
 Considerando a complexidade já existente da PR, este recurso foi deixado para ser implementado
 em outra Pull Request, a PR \#15253 - "Inter-Job Direct Messaging".
-
-Isto não foi solicitado diretamente nas issues do projeto, mas o autor considerou que este
-tipo de recurso poderia ser útil para o desenvolvimento de scripts complexos.
 
 === 4. Ctrl-Z em POSIX
 
 Os sistemas operacionais POSIX possuem o conceito de #link("https://en.wikipedia.org/wiki/Signal_(IPC)")[sinais],
 mensagens instantâneas numéricas predeterminadas que podem ser enviadas de um processo para outro.
+Um destes sinais, é o sinal `SIGTSTP`, que para/congela a execução de um processo quando recebido.
+Uma vez congelado, um processo pode ser ter sua execução resumida ao receber o sinal `SIGCONT`.
 
-=== Detalhes de Implementação da PR
+Os emuladores de terminais tradicionais de sistemas POSIX possuem o recurso de enviar o sinal SIGSTP para o processo
+ativo no terminal, caso o usuário do terminal digite a sequência de teclado Ctrl-Z. Levando isso
+em consideração, os shells em sistemas POSIX costumam ser capazes de detectar quando o processo
+ativo recebe este sinal, e registram um job em nome deste proceso.
+
+
+== Detalhes de Implementação da PR
+
+=== Criação de Jobs
+
+O projeto nushell é implementado na linguagem de programação Rust, que tem como
+ um de seus principais objetivos a facilitação na implementação de programas multi-threaded
+seguros. Isto facilitou consideravelmente a implementação inicial deta implementação.
+
+Como exemplo, a linguagem por padrão proíbe a criação de variáveis globais mutáveis, incentivando
+o uso de structs passadas como argumento para subrotinas para implementar estado compartilhado.
+Em nushell, isso se dá por meio das structs `EngineState` e `Stack`, que guardam todo o estado mutável da
+thread principal, como símbolos e variáveis locais.
+
+Na implementação deste trabalho, essas structs são clonada para cada thread nova inicializada,
+para que o estado das múltiplas threads não interfiram entre sí.
+
+Para a criação de jobs, foi adicionado o comando `job spawn`, que recebe uma função/closure
+e executa esta em uma nova thread. // TODO: falar do ID retornado pelo job spawn
 
 ...
 
@@ -484,7 +510,7 @@ mensagens instantâneas numéricas predeterminadas que podem ser enviadas de um 
 // e salientar mudanças de design importantes, como CSP vs Actor Model.
 - Alterações implementadas:
 
-. Spawn de jobs:
+[X] Spawn de jobs:
 Falar de closures, da struct EngineState, comandos experimentais, e do comando `job spawn`, e tratamento de erros.
 falar de como posteriormente, o job spawn foi modificado para que este retorne o id do job spawnado.
 
