@@ -148,11 +148,13 @@ utilizada por usuários técnicos nos dias modernos em computadores desktop e se
 No contexto dos terminais de texto, a interação do usuário com o sistema operacional é feita
 por meio de um programa denomidado shell, no qual o usuário digita um comando a ser realizado
 e recebe como feedback texto descrevendo o resultado do comando concluído.
+// TODO: falar também sobre scripts.
 
 Os shell mais tradicionais usados por usuários técnicos de sistemas derivados de unix (i.e Linux e MacOS), são denominados de shell
 POSIX, e o maior representante desta categoria é o shell GNU bash. Nestes shells,
 um recurso ubíquo é a capacidade de concatenar a saída textual de um comando,
  na entrada textual de outro comando, permitindo variadas manipulações textuais.
+// TODO: nomear isto como pipeline
 
 
 Neste tipo de shell, não existe estrutura geral fixa para as entradas e saídas dos comandos -- cada um
@@ -364,46 +366,131 @@ Visando a demanda por estes recursos no projeto, e a relevância deste shell,
 este trabalho acadêmico consiste na implementação e integração destes dois recursos
  no projeto nushell.
 
+== Estrutura da Monografia
+
+- Capitulo 1: Introdução
+1. O que é o nushell
+Uma breve descrição do projeto e do impacto dele (número de usuários, estrelas, etc),
+
+2. Ausência de background jobs no projeto
+Um relatório da falta de jobs no projeto e como isso afeta os usuários
+
+- Capitulo 2: Overview do trabalho
+1. O que foi implementado, e como isso se compara com shells tradicionais
+11. Spawn de jobs
+12. Listaegm de jobs
+13. Remoção de jobs
+
+2. Inter-Job-Communication
+
+- Capitulo 3: Detalhes de implementação
+
+- Capítulo 4: 
+
+
 #pagebreak()
 
-= Capitulo 2
-= Desenvolvimento
+= Capitulo 2 \ Resultados
 
-// Um resumo geral do que foi feito, quantas contribuições foram realizadas
+// TODO: Mencionar que o trabalho foi feito no começo de 2025 em duas pull requests?
+Neste capítulo será descrito o que foi desenvolvido neste trabalho e acrescentado
+ao projeto nushell, do ponto de vista do usuário.
 
-== Implementação
+== Criação de Tarefas em Segundo Plano
 
-O projeto nushell é #fixme[hosteado] na plataforma
-#link("https://en.wikipedia.org/wiki/GitHub")[GitHub], #fixme[onde]
-a unidade fundamental de contribuição é denominada _Pull Request_ (PR).
-A convenção do quão grande deve ser uma pull request varia de projeto a projeto.
-No nushell, a convenção é a implementação de um recurso por pull request, a menos
-que esse recurso possa ser divido apropriadamente em atualizações menores.
+Quando um comando é executado em um shell POSIX, um processo novo é iniciado para a
+execução do programa, e o shell espera até que este termine antes de continuar
+executando outros comandos. Desta forma, o usuário fica impossibilitado
+de utilizar o shell, até que o programa iniciado termine sua execução.
+Isso também garante que, em scripts, os comandos sejam executados um por vez.
 
-O desenvolvimento deste trabalho aconteceu por meio de múltiplas pull requests, realizadas
-durante os mêses de janeiro e fevereiro de 2025.
+Existem cenários em que é adequada a execução de um processo, enquanto o shell
+fica liberado para iniciar outros comandos. Em shells POSIX, isto é possível
+por meio do operador especial `&`, que quando adicionado ao final de um comando,
+instrue o shell a executar o programa como um processo em segundo plano, e não
+esperar este terminar, para continuar sua execução.
+
+Na @tar_vim_bash, é exibido um exemplo de código bash que inicia um processo
+em segundo plano para realizar uma operação demorada, comprimir e arquivar
+uma pasta grande em um arquivo, e iniciar um outro processo,
+ o editor de texto `vim`,
+enquanto a compressão ocorre em segundo plano.
+
+#figure([
+ ```bash
+tar --create --gzip --file downloads.tar.gz Downloads &
+vim todo.txt
+```
+]) <tar_vim_bash>
+
+Esta capabilidade foi adicionada ao shell nushell neste trabalho, por meio
+da adição do comando `job spawn`. Este comando recebe uma closure -- um bloco de código executável como uma
+função -- e executa ela em segundo plano.
+
+#figure([
+  ```bash
+job spawn { tar --create --gzip --file downloads.tar.gz Downloads }
+vim todo.txt
+```
+]) <tar_vim_nu>
+
+== Listagem de Tarefas
+
+Em shells POSIX, é comum que quando uma tarefa de segundo plano seja criada,
+é exibido ao usuário um número indicando um ID numérico para tarefa. Ao se utilizar
+o comando especial `jobs`, é possível listar as tarefas atualmente ativas e seus IDs.
+
+De maneira similar, o comando `job spawn` implementado devolve um inteiro representando
+o ID do job adicionado. Para listar as tarefas de segundo plano em execução, é possível utilizar
+o comando `job list` para listar as tarefas de segundo plano ativas.
+
+// TODO: inserir figuras com isso
+
+== Ctrl-Z em sistemas POSIX
+
+Os sistemas operacionais POSIX possuem o conceito de #link("https://en.wikipedia.org/wiki/Signal_(IPC)")[sinais],
+mensagens instantâneas numéricas predeterminadas que podem ser enviadas de um processo para outro.
+Um destes sinais, é o sinal `SIGTSTP`, que para/congela a execução de um processo quando recebido.
+Uma vez congelado, um processo pode ser ter sua execução resumida ao receber o sinal `SIGCONT`.
+
+Os emuladores de terminais tradicionais de sistemas POSIX possuem o recurso de enviar o sinal `SIGSTP` para o processo
+ativo no terminal, caso o usuário do terminal digite a sequência de teclado Ctrl-Z. Levando isso
+em consideração, os shells em sistemas POSIX costumam ser capazes de detectar quando o processo
+ativo recebe este sinal, registrar um job em nome do processo que foi congelado, e
+retomar o controle do terminal para si, permitindo que o usuário possa continuar a
+executar comandos enquanto o programa está congelado.
+
+Uma das utilidades deste recurso é permitir que o usuário continue usando o shell atual
+mesmo que inicie um comando demorado sem querer. Por exemplo, imagine
+que um usuário de shell POSIX gostaria de comprimir uma pasta chamada `Videos` em um arquivo `videos.tar.gz`,
+e executa o comando `tar -czf videos.tar.gz Videos`, mas subestima a quantidade de
+tempo demorada para comprimir vídeos, e de colocar `&` no final do comando. Em condições normais,
+o usuário estaria impossibilitado de utilizar o sistema, até que o arquivamento termine, ou até
+o usuário interromper a execução com `Ctrl-C`. Utilizando `Ctrl-Z`, o usuário consegue
+suspender a execução do comando, e continuar sua execução em segundo plano com o comando `bg`
+(abreviação para _background_, plano de fundo),
+ou continuar a execução normalmente em primeiro plano com o comando `fg` (abreviação para _foreground_).
+
+Antes da implementação deste trabalho, o nushell não possuia suporte ao sinal `SIGSTP`,
+e este tipo de manipulação de processos não era possível. Agora, o shell responde apropriadamente
+ao sinal `SIGTSTP` emitido pela sequência `Ctrl-Z`, e permite que comandos congelados possam ser
+continuados em foreground com `job unfreeze`, ou continuados em background com `job spawn { job unfreeze }`.
+
+// TODO: incluir fotos de antes/depois em Ctrl-Z
+// TODO: incluir fotos de ctrl-z em bash
 
 
-== Pull Request \#14883 - Jobs
 
-// marcador para partes do texto que ainda precisam de trabalho.
+
+#pagebreak()
+
+= Capitulo 3 \ Detalhes de Implementação
 
 /*
-A primeira e principal _pull request_
-- Proposta inicial da contribuição
-. Background jobs, por meio de threads
-. Background jobs, por processos separados
-. Comunicação entre threads por meio de communicating sequential processes
-*/
 
-
-
-A principal contribuição realizada neste trabalho consiste na  _Pull Request_ _\#14883_, `Jobs`.
-Esta PR tinha no início, o objetivo de implementar os seguintes recursos:
-
-=== 1. Tarefas em segundo plano, por meio de threads.
-Um dos requisitos para esta implementação, é capacidade de tarefas de segundo plano 
-de executar código nushell e fazer computações, além de simplemente executar programas em segundo plano.
+=== 1. Tarefas em segundo plano, por meio de threads
+Um dos requisitos solicitados pelos usuários do projeto, que tarefas em segundo plano 
+não apenas sejam capazes de executar programas separados, mas também de executar código nushell.
 Como exemplo, o código abaixo em `bash` utiliza do recurso deste shell de realizar operações
 aritméticas, para computar o resultado da expressão 10+20, e salvar este em um arquivo `result.txt`,
 por meio de um background job.
@@ -433,8 +520,15 @@ job spawn { let result = 10 + 20; $result | save result.txt }
 sleep 1sec
 open result.txt
 ```
-
 // TODO: fazer ilustrações mostrando a diferença entre os dois modelos
+*/
+
+#pagebreak()
+
+= Capitulo 4 \ Impacto
+
+
+/*
 
 === 2. Tarefas em segundo plano baseadas em processos
 
@@ -455,11 +549,10 @@ do projeto foi criada para representar a demanda por este recurso.
 === 3. Comunicação entre threads por meio de _Communicating Sequential Processes_
 
 A escolha de threads para a implementação de background jobs abre oportunidade
-para a adição de mecanismos de comunicação entre threads à linguagem, para permitir
-que tarefas em segundo plano possam comunicar entre si, permitindo que scripts em nushell
-possam implementar algorítmos paralelos.
+para a adição de mecanismos de comunicação entre threads à linguagem,
+permitindo que scripts em nushell possam implementar algorítmos paralelos.
 
-Para permitir isso, umas das ideias iniciasi da PR era a implementação de comunicação entre threads
+Para possibilitar isso, umas das ideias inicias da PR era a implementação de comunicação entre threads
 por meio do modelo de interação concorrente
 #link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
   Communicating Sequantial Processes
@@ -471,28 +564,19 @@ que permitiriam a operação de objetos denominados canais, que se comportam com
 Considerando a complexidade já existente da PR, este recurso foi deixado para ser implementado
 em outra Pull Request, a PR \#15253 - "Inter-Job Direct Messaging".
 
-=== 4. Ctrl-Z em POSIX
+*/
 
-Os sistemas operacionais POSIX possuem o conceito de #link("https://en.wikipedia.org/wiki/Signal_(IPC)")[sinais],
-mensagens instantâneas numéricas predeterminadas que podem ser enviadas de um processo para outro.
-Um destes sinais, é o sinal `SIGTSTP`, que para/congela a execução de um processo quando recebido.
-Uma vez congelado, um processo pode ser ter sua execução resumida ao receber o sinal `SIGCONT`.
-
-Os emuladores de terminais tradicionais de sistemas POSIX possuem o recurso de enviar o sinal SIGSTP para o processo
-ativo no terminal, caso o usuário do terminal digite a sequência de teclado Ctrl-Z. Levando isso
-em consideração, os shells em sistemas POSIX costumam ser capazes de detectar quando o processo
-ativo recebe este sinal, e registram um job em nome deste proceso.
-
-
+/*
 == Detalhes de Implementação da PR
 
 === Criação de Jobs
 
 O projeto nushell é implementado na linguagem de programação Rust, que tem como
  um de seus principais objetivos a facilitação na implementação de programas multi-threaded
-seguros. Isto facilitou consideravelmente a implementação inicial deta implementação.
+seguros. Isto facilitou consideravelmente a implementação inicial de multithreading no projeto.
 
-Como exemplo, a linguagem por padrão proíbe a criação de variáveis globais mutáveis, incentivando
+Um exemplo de políticas da linguagem que facilitam a implementação de programas
+multithreaded, é o fato da linguagem por padrão proibir a criação de variáveis globais mutáveis, incentivando
 o uso de structs passadas como argumento para subrotinas para implementar estado compartilhado.
 Em nushell, isso se dá por meio das structs `EngineState` e `Stack`, que guardam todo o estado mutável da
 thread principal, como símbolos e variáveis locais.
@@ -548,3 +632,4 @@ Falar de como o projeto foi bem vindo, e falar de depoimentos e agradecimentos q
 // PR - Pull Request
 // TODO: adicionar termos em inglês
 // TODO: deixar claro a interoperabilidade de tarefa de segundo plano, background job, job
+*/
