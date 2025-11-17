@@ -136,10 +136,7 @@ TODO: Update this description to match the portuguese one.
 
 #pagebreak()
 
-= Capitulo 1
-
-
-= Introdução
+= Capitulo 1 \ Introdução
 
 
 
@@ -390,7 +387,7 @@ Um relatório da falta de jobs no projeto e como isso afeta os usuários
 
 #pagebreak()
 
-= Capitulo 2 \ Resultados
+= Capitulo 2 \ Visão Geral
 
 // TODO: Mencionar que o trabalho foi feito no começo de 2025 em duas pull requests?
 Neste capítulo será descrito o que foi desenvolvido neste trabalho e acrescentado
@@ -446,6 +443,14 @@ o comando `job list` para listar as tarefas de segundo plano ativas.
 
 // TODO: inserir figuras com isso
 
+Em particular, como a implementação do nushell de background jobs recebe uma closure
+para executar tarefas em segundo plano, e closures podem executar múltiplos processos simultâneamente
+por meio pipelines, a listagem de jobs do nushell mostra para cada job, uma lista de todos
+os processos atualmente em execução por aquele job.
+
+Adicionalmente, também foi providenciado o comando `job id`, que devolve o ID do job
+atual (0 caso executado fora de uma tarefa em segundo plano)
+
 == Ctrl-Z em sistemas POSIX
 
 Os sistemas operacionais POSIX possuem o conceito de #link("https://en.wikipedia.org/wiki/Signal_(IPC)")[sinais],
@@ -464,23 +469,122 @@ Uma das utilidades deste recurso é permitir que o usuário continue usando o sh
 mesmo que inicie um comando demorado sem querer. Por exemplo, imagine
 que um usuário de shell POSIX gostaria de comprimir uma pasta chamada `Videos` em um arquivo `videos.tar.gz`,
 e executa o comando `tar -czf videos.tar.gz Videos`, mas subestima a quantidade de
-tempo demorada para comprimir vídeos, e de colocar `&` no final do comando. Em condições normais,
+tempo demorada para comprimir vídeos, e esquece de colocar `&` no final do comando. Em condições normais,
 o usuário estaria impossibilitado de utilizar o sistema, até que o arquivamento termine, ou até
-o usuário interromper a execução com `Ctrl-C`. Utilizando `Ctrl-Z`, o usuário consegue
+o usuário aborte a execução do programa. Utilizando `Ctrl-Z`, o usuário consegue
 suspender a execução do comando, e continuar sua execução em segundo plano com o comando `bg`
-(abreviação para _background_, plano de fundo),
-ou continuar a execução normalmente em primeiro plano com o comando `fg` (abreviação para _foreground_).
+(abreviação para _background_, plano de fundo).
+
+Um outro caso de uso para este recurso, é um em que o usuário utiliza um
+programa de terminal simples como `nano` para editar arquivos de código fonte `.c`,
+e gostaria de executar um comando de compilação como `make`, para depois voltar a
+utilizar o editor de texto. Sem Ctrl-Z, o usuário precisa fechar o seu editor para
+executar o comando de compilação, ou abrir
+outras instâncias simultâneas de shell em outros terminais, multiplexadores de terminais
+como `tmux`. Ativando Ctrl-Z enquanto o editor está ativo, o processo do editor é congelado,
+e o terminal volta seu foco ao shell ativo. Assim, o usuário pode executar os comandos
+de compilação que deseja, e retomar a edição do arquivo em primeiro plano como antes por meio do
+comando `fg` (abreviação para _foreground_).
+
 
 Antes da implementação deste trabalho, o nushell não possuia suporte ao sinal `SIGSTP`,
 e este tipo de manipulação de processos não era possível. Agora, o shell responde apropriadamente
 ao sinal `SIGTSTP` emitido pela sequência `Ctrl-Z`, e permite que comandos congelados possam ser
-continuados em foreground com `job unfreeze`, ou continuados em background com `job spawn { job unfreeze }`.
+continuados em primeiro plano (_foreground_, `fg`) com `job unfreeze`, ou continuados em segundo plano (_background_, `bg`) com `job spawn { job unfreeze }`.
 
 // TODO: incluir fotos de antes/depois em Ctrl-Z
 // TODO: incluir fotos de ctrl-z em bash
 
+== Assasinato de Jobs
 
+Em sistemas POSIX, os shells permitem que jobs sejam removidos pelos seus usuários utilizando
+o ID do job  utilizando o comando `kill %N` onde `N`
+é o ID do job a ser removido. 
+O ID do job é mesmo que é exibido quando a tarefa é criada, e pode ser confirmado
+listando as tarefas ativas com `jobs`.
 
+A implementação nushell deste recurso é similar, por meio do comando `job kill`, que
+recebe o ID retornado por `job spawn`, e interrompe a tarefa, matando
+todos os processos ativos nela.
+
+// TODO: incluir foto de exemplo
+
+== Comunicação entre Jobs
+
+Apesar de não ter sido solicitado originalmente pelos usuários do projeto, este trabalho
+adicionou  capabilidades de comunicação entre tarefas de segundo plano ao projeto nushell.
+
+A ideia inicial era a 
+implementação de comunicação entre threads
+por meio do modelo de interação concorrente
+#link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
+  Communicating Sequantial Processes
+] (CSP), de Tony Hoare,
+que também inspirou o design das linguagens `OCaml`, `Go`, `Rust`, e `Clojure`.
+Neste modelo, seria implementado um tipo de dado mutável denominado 'canal', que poderia
+ser compartilhado entre jobs, do qual o envio de mensagens seria possível por meio de comandos
+como `channel send` e `chanel recv`.
+// TODO: add citation 
+// TODO: should we move this to implementation details?
+
+Entretanto, isto iria introduzir estado local mutável compartilhado na linguagem, o que traria
+complexidades adicionais negativas, como ciclos de referência, e por consequência, garbage collection.
+Por este motivo, outro modelo foi investigado e utilizado.
+
+O modelo de comunicação entre tarefas implementado foi inspirado no da linguagem de programação
+funcional Erlang, inspirado por sua vez no modelo de computação concorrente baseado em
+#link("https://en.wikipedia.org/wiki/Actor_model")[atores].
+
+No modelo implementado, cada job possui uma lista interna de valores denominada sua "caixa de entrada"
+ou _mailbox_. Dado o ID de um job, é possível enviar uma mensagem para este
+(ou seja, adicionar uma mensagem à sua mailbox), utilizando o comando
+`job send`, informando o valor a ser enviado, e o ID do destinatário. Qualquer valor
+pode ser enviado.
+Um job pode verificar as mensagens em sua mailbox utilizando o comando `job recv`, que
+retira uma mensagem da mailbox, em estilo First-In-First-Out (ou seja, ele retira
+a mensagem mais antiga inserida na mailbox). Caso não tenha nenhuma mensagem
+na mailbox, o comando `job recv` fica inativo esperando até que alguma mensagem
+chegue, ou até que este tenha sua execução interrompida (por exempo, por `Ctrl-C`).
+
+A @job_msg mostra um exemplo de uso destes recurso, que permite
+ao sistema esperar uma tarefa de segundo plano terminar.
+Neste exemplo, a tarefa computa o número de ocorrências da palavra _"machine"_
+no livro _On the Economy of Machinery and Manufactures_ de Charles Babbage.
+
+#figure([
+```nu
+let parent = job id
+
+let id = job spawn {
+  http get https://www.gutenberg.org/cache/epub/4238/pg4238.txt
+    | split words
+    | str downcase
+    | find machine
+    | length
+    | job send $parent
+}
+
+# Quando o usuário quiser obter o resultado, executa
+job recv
+```
+]) <job_msg>
+
+Além disso, o comando `job send` permite que mensagens sejam enviadas com um metadado
+numérico chamado `tag`. Essa tag pode ser utilizada no comando `job recv`, que só vai
+remover da mailbox mensagens que possuam as mesmas tags que as enviadas.
+
+// TODO: incluir exemplo disso
+
+Adicionalmente, o comando `job flush` foi adicionado, que remove todas as mensagens da mailbox.
+
+// TODO: adicionar comparação com erlang
+
+== Nomeação de Jobs
+
+Não originalmente planejado na implementação deste trabalho, mas posteriormente
+solicitado por usuários, foi implementado o recurso de adicionar tag/nomes a jobs,
+por meio da flag `--tag` do comando `job spawn`, ou do comando `job tag`, que
+adiciona uma tag a um job existente.
 
 #pagebreak()
 
@@ -552,17 +656,6 @@ A escolha de threads para a implementação de background jobs abre oportunidade
 para a adição de mecanismos de comunicação entre threads à linguagem,
 permitindo que scripts em nushell possam implementar algorítmos paralelos.
 
-Para possibilitar isso, umas das ideias inicias da PR era a implementação de comunicação entre threads
-por meio do modelo de interação concorrente
-#link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
-  Communicating Sequantial Processes
-] (CSP), de Tony Hoare,
-que inspirou também as implementações das linguagens `Go`, `Rust`, e `Clojure`.
-
-A ideia inicial, consistia na criação de comandos `channel make`, `channel send`, `channel recv` e `channel close`,
-que permitiriam a operação de objetos denominados canais, que se comportam como filas com garantias de sincronização.
-Considerando a complexidade já existente da PR, este recurso foi deixado para ser implementado
-em outra Pull Request, a PR \#15253 - "Inter-Job Direct Messaging".
 
 */
 
