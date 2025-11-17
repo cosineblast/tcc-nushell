@@ -121,7 +121,7 @@ Ever since its inception in 2019, the project has been requested to implement ba
 
 This project consists in the implementation, documentation and integration of a background job infrastructure in nushell
 On top of multithreading, background jobs and process suspension, Erlang-style message passing was also implemented.
-TODO: Update this description to match the portuguese one.
+//TODO: Update this description to match the portuguese one.
   ],
   keywords: [
   *Keywords*: Shell, Background jobs.
@@ -132,30 +132,66 @@ TODO: Update this description to match the portuguese one.
 
 = Sumário
 
-...
+O sumário deste trabalho ainda está em desenvolvimento, o texto a seguir descreve
+em termos gerais a estrutura desta monografia.
+
+*- Capitulo 1: Introdução*
+1. O que é o nushell
+Uma breve descrição do projeto e do impacto dele (número de usuários, estrelas, etc),
+
+2. Ausência de background jobs no projeto
+Um relatório da falta de jobs no projeto e como isso afeta os usuários
+
+*- Capitulo 2: Overview do trabalho*
+1. O que foi implementado, e como isso se compara com shells tradicionais
+11. Spawn de jobs
+12. Listaegm de jobs
+13. Remoção de jobs
+
+2. Inter-Job-Communication
+
+*- Capitulo 3: Detalhes de implementação*
+1. Escolha de threads vs processos
+2. Clonagem do estado de threads, estado compartilhado por mutex
+3. Algoritmo de remoção de jobs
+4. Process groups e pipelines
+5. Comunicação entre jobs, estrutura de dados utilizada
+
+*- Capítulo 4: Impacto*
+1. Agradecimentos no Discord
+2. Ocorrências de comandos de job em scripts pela busca no github
+
 
 #pagebreak()
 
 = Capitulo 1 \ Introdução
 
+O terminal de texto é uma interface de interação entre
+humanos e computadores frequentemente utilizada por usuários
+técnicos em computadores desktop e servidores remotos.
+No contexto dos terminais de texto, a interação do usuário
+com o sistema operacional é feita por meio de um
+programa denominado shell. O usuário pode interagir de
+forma interativa, digitando um comando a ser realizado
+e recebendo como feedback texto descrevendo o resultado
+do comando concluído. Além disso, os shells
+são fundamentais para a execução de scripts,
+que são arquivos contendo sequências de comandos
+que podem ser executados de forma não interativa
+para automatizar tarefas.
 
+Os shells mais tradicionais usados por usuários técnicos
+de sistemas derivados de Unix (como Linux e macOS) são
+denominados shells POSIX, sendo o maior representante desta
+categoria o shell GNU Bash. Nestes shells, um recurso
+ubíquo é a capacidade de concatenar a saída textual de
+um comando na entrada textual de outro comando.
+Este mecanismo é conhecido como _pipeline_ e permite
+variadas manipulações textuais complexas e a construção
+de fluxos de trabalho avançados.
 
-O terminal de texto é uma interface de interação entre humanos e computadores frequentemente
-utilizada por usuários técnicos nos dias modernos em computadores desktop e servidores remotos.
-No contexto dos terminais de texto, a interação do usuário com o sistema operacional é feita
-por meio de um programa denomidado shell, no qual o usuário digita um comando a ser realizado
-e recebe como feedback texto descrevendo o resultado do comando concluído.
-// TODO: falar também sobre scripts.
-
-Os shell mais tradicionais usados por usuários técnicos de sistemas derivados de unix (i.e Linux e MacOS), são denominados de shell
-POSIX, e o maior representante desta categoria é o shell GNU bash. Nestes shells,
-um recurso ubíquo é a capacidade de concatenar a saída textual de um comando,
- na entrada textual de outro comando, permitindo variadas manipulações textuais.
-// TODO: nomear isto como pipeline
-
-
-Neste tipo de shell, não existe estrutura geral fixa para as entradas e saídas dos comandos -- cada um
-com suas própias convenções sobre o formato textual dos dados -- é comum se referir a este como um modelo de dados não estruturados.
+Neste tipo de shell, não existe estrutura geral fixa para as entradas e saídas dos comandos, cada um
+com suas própias convenções sobre o formato textual dos dados, logo é comum se referir a este como um modelo de dados não estruturados.
 
 Em particular, é comum o uso de textos representando tabelas neste modelo, onde as linhas das tabelas são separadas
 pelos caracteres de quebra de linha textuais (também conhecido por "\\n"), e as colunas das tabelas são separadas por quantidades variadas
@@ -228,7 +264,7 @@ Como pode ser visto, a solução deste simples problema em POSIX envolve
 - Interpretadores de linguagens de programação de manipulação de texto como `awk`
 - Tratamento de conversão numérica-textual no `sort`
 
-== Nushell
+== Contextualizando Nushell
 
 Nushell é um shell moderno desenvolvido com o objetivo de providenciar uma experiência
 multiplataforma e amigável.
@@ -306,6 +342,13 @@ acontecem manipulações de colunas textuais separadas por espaço, arquivos con
 Em particular, este modelo de resolução de problemas baseado em composições de transformações, se adequa bem ao paradigma de programação
 funcional, tornando nushell uma linguagem apropriada para uma introdução sutil a este paradigma.
 
+O projeto é amplamente utilizado, contando com 37 mil estrelas no Github, e milhares de repositórios
+contendo arquivos de configuração na linguagem nushell.
+
+// TODO: incluir footnote para a busca de arquivos
+//  path:/(\/config.nu$|^config.nu$)/
+// https://github.com/search?q=path%3A%2F%28%5C%2Fconfig.nu%24%7C%5Econfig.nu%24%29%2F&type=code
+
 No chat do servidor oficial do Discord do nushell, podem ser encontrados vários
 depoimentos de usuários sobre aspectos positivos e negativos do projeto, incluindo o seguinte depoimento anônimo, incluido com permissão do autor:
 
@@ -335,11 +378,12 @@ Um programa suspenso pode posteriormente ser resumido por um comando providencia
 Antes do início deste trabalho acadêmico, nushell não possuia suporte a suspensão de processos por `Ctrl-Z`,
 ou a tarefas de segundo plano. No repostiório Github do projeto, a `issue`  relacionada a estes
 recursos é uma das mais antigas, e uma das mais apoiadas pelos usuários. Esta
-foi criada no mesmo ano de surgimento do projeto, em 2019, e é a quinta solicitação com mais reações
-positivas "Thumbs Up" do projeto, que possui mais de 6 mil issues.
+foi criada no mesmo ano de surgimento do projeto, em 2019, e dentre as mais de 6 mil issues do projeto,
+esta é a quinta solicitação com mais reações
+positivas "Thumbs Up".
 
 Nos comentários dessa issue, é possível ver o descontento de múltiplos usuários com a ausência destes recursos
-neste shell:
+no nushell:
 
 
 #quote(attribution: [tmillr])[
@@ -363,53 +407,36 @@ Visando a demanda por estes recursos no projeto, e a relevância deste shell,
 este trabalho acadêmico consiste na implementação e integração destes dois recursos
  no projeto nushell.
 
-== Estrutura da Monografia
-
-- Capitulo 1: Introdução
-1. O que é o nushell
-Uma breve descrição do projeto e do impacto dele (número de usuários, estrelas, etc),
-
-2. Ausência de background jobs no projeto
-Um relatório da falta de jobs no projeto e como isso afeta os usuários
-
-- Capitulo 2: Overview do trabalho
-1. O que foi implementado, e como isso se compara com shells tradicionais
-11. Spawn de jobs
-12. Listaegm de jobs
-13. Remoção de jobs
-
-2. Inter-Job-Communication
-
-- Capitulo 3: Detalhes de implementação
-
-- Capítulo 4: 
-
 
 #pagebreak()
 
 = Capitulo 2 \ Visão Geral
 
-// TODO: Mencionar que o trabalho foi feito no começo de 2025 em duas pull requests?
+Durante o ano de 2025, múltiplas Pull Requests foram propostas no desenvolvimento deste trabalho.
+Já aceitas no projeto, estas contribuições integram no shell os recursos solicitados pelos usuários, além de outros adicionais. 
 Neste capítulo será descrito o que foi desenvolvido neste trabalho e acrescentado
-ao projeto nushell, do ponto de vista do usuário.
+ao projeto nushell, do ponto de vista do usuário, enquanto os detalhes de implementação são
+tratados no Capítulo 3.
+// TODO: add footnote about pull request definition
 
 == Criação de Tarefas em Segundo Plano
 
 Quando um comando é executado em um shell POSIX, um processo novo é iniciado para a
 execução do programa, e o shell espera até que este termine antes de continuar
-executando outros comandos. Desta forma, o usuário fica impossibilitado
-de utilizar o shell, até que o programa iniciado termine sua execução.
+executando outros comandos.
+Desta forma, o usuário fica impossibilitado de utilizar o shell, até que o programa iniciado termine sua execução.
+// TODO: rephrase this ^
 Isso também garante que, em scripts, os comandos sejam executados um por vez.
 
-Existem cenários em que é adequada a execução de um processo, enquanto o shell
-fica liberado para iniciar outros comandos. Em shells POSIX, isto é possível
+Existem cenários em que é adequada a execução de um processo, ao mesmo tempo em que
+o shell continua livre para iniciar outros comandos. Em shells POSIX, isto é possível
 por meio do operador especial `&`, que quando adicionado ao final de um comando,
 instrue o shell a executar o programa como um processo em segundo plano, e não
-esperar este terminar, para continuar sua execução.
+esperar este terminar para continuar executando outros comandos.
 
 Na @tar_vim_bash, é exibido um exemplo de código bash que inicia um processo
 em segundo plano para realizar uma operação demorada, comprimir e arquivar
-uma pasta grande em um arquivo, e iniciar um outro processo,
+uma pasta grande "`Downloads`" em um arquivo "`downloads.tar.gz`", e iniciar um outro processo,
  o editor de texto `vim`,
 enquanto a compressão ocorre em segundo plano.
 
@@ -418,7 +445,9 @@ enquanto a compressão ocorre em segundo plano.
 tar --create --gzip --file downloads.tar.gz Downloads &
 vim todo.txt
 ```
-]) <tar_vim_bash>
+],
+caption: [ Exemplo de código em bash para iniciar uma compressão em segundo plano, enquanto o usuário usa o editor de terminal vim ]
+) <tar_vim_bash>
 
 Esta capabilidade foi adicionada ao shell nushell neste trabalho, por meio
 da adição do comando `job spawn`. Este comando recebe uma closure -- um bloco de código executável como uma
@@ -433,23 +462,54 @@ vim todo.txt
 
 == Listagem de Tarefas
 
-Em shells POSIX, é comum que quando uma tarefa de segundo plano seja criada,
-é exibido ao usuário um número indicando um ID numérico para tarefa. Ao se utilizar
+Em shells POSIX, é comum que a criação de tarefas em segundo plano mostre
+ao usuário um número indicando um ID numérico dedicado para a tarefa. Ao se utilizar
 o comando especial `jobs`, é possível listar as tarefas atualmente ativas e seus IDs.
+De maneira similar, o comando `job spawn` implementado retorna um inteiro representando
+o ID do job adicionado.
 
-De maneira similar, o comando `job spawn` implementado devolve um inteiro representando
-o ID do job adicionado. Para listar as tarefas de segundo plano em execução, é possível utilizar
-o comando `job list` para listar as tarefas de segundo plano ativas.
+Para listar as tarefas de segundo plano em execução no nushell, foi providenciado
+o comando `job list`. No exemplo da @spawn_then_list, duas tarefas de segundo plano são iniciadas,
+a primeira comprimindo a pasta "Downloads" no arquivo "downloads.tar.gz" diretamente, e a segunda tarefa
+converte um arquivo "logs.txt.gz" (comprimido
+utilizando o formato _gzip_) para um arquivo "logs.txt.xz" (utilizando o formato de compressão _xz_, que costuma
+ser mais compacto).
 
-// TODO: inserir figuras com isso
+#figure([
+```bash
+job spawn { tar --create --gzip --file downloads.tar.gz Downloads }
+# 5
+job spawn { gunzip --stdout logs.txt.gz | xz | save logs.txt.xz }
+# 6
+job list
+#               ┏━━━┳━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━┓
+#               ┃ # ┃ id ┃  type  ┃     pids      ┃
+#               ┣━━━╋━━━━╋━━━━━━━━╋━━━━━━━━━━━━━━━┫
+#               ┃ 0 ┃  5 ┃ thread ┃ ┏━━━┳━━━━━━━┓ ┃
+#               ┃   ┃    ┃        ┃ ┃ 0 ┃ 94796 ┃ ┃
+#               ┃   ┃    ┃        ┃ ┗━━━┻━━━━━━━┛ ┃
+#               ┃ 1 ┃  6 ┃ thread ┃ ┏━━━┳━━━━━━━┓ ┃
+#               ┃   ┃    ┃        ┃ ┃ 0 ┃ 94797 ┃ ┃
+#               ┃   ┃    ┃        ┃ ┃ 1 ┃ 94795 ┃ ┃
+#               ┃   ┃    ┃        ┃ ┗━━━┻━━━━━━━┛ ┃
+#               ┗━━━┻━━━━┻━━━━━━━━┻━━━━━━━━━━━━━━━┛
+```
+],
+caption: [
+  Exemplo de execução do comando `job list`. Nesta listagem, as saídas dos comandos é indicada por "`#`" no começo das linhas.
+]
+) <spawn_then_list>
 
-Em particular, como a implementação do nushell de background jobs recebe uma closure
-para executar tarefas em segundo plano, e closures podem executar múltiplos processos simultâneamente
-por meio pipelines, a listagem de jobs do nushell mostra para cada job, uma lista de todos
-os processos atualmente em execução por aquele job.
+Em particular, como a implementação desenvolvida recebe uma closure
+para executar tarefas em segundo plano, e closures podem executar múltiplos processos simultaneamente
+por meio pipelines, a listagem de jobs do nushell mostra uma lista de todos
+os processos atualmente em execução por cada tarefa. Na @spawn_then_list, isto pode ser visto
+no job de ID 6, que simultâaneamente executa os comandos `gunzip` e `xz`, e em sua listagem, aparecem
+os dois PIDs.
+// TODO: Add PID to glossary.
 
 Adicionalmente, também foi providenciado o comando `job id`, que devolve o ID do job
-atual (0 caso executado fora de uma tarefa em segundo plano)
+atual, ou 0 caso executado fora de uma tarefa em segundo plano.
 
 == Ctrl-Z em sistemas POSIX
 
@@ -480,10 +540,10 @@ programa de terminal simples como `nano` para editar arquivos de código fonte `
 e gostaria de executar um comando de compilação como `make`, para depois voltar a
 utilizar o editor de texto. Sem Ctrl-Z, o usuário precisa fechar o seu editor para
 executar o comando de compilação, ou abrir
-outras instâncias simultâneas de shell em outros terminais, multiplexadores de terminais
-como `tmux`. Ativando Ctrl-Z enquanto o editor está ativo, o processo do editor é congelado,
+outras instâncias simultâneas de shell em outros terminais, ou usar multiplexadores de terminais
+como `tmux`. Inserindo a combinação Ctrl-Z enquanto o editor está ativo, o processo do editor é congelado,
 e o terminal volta seu foco ao shell ativo. Assim, o usuário pode executar os comandos
-de compilação que deseja, e retomar a edição do arquivo em primeiro plano como antes por meio do
+de compilação que deseja, e retomar a edição do arquivo em primeiro plano como antes, por meio do
 comando `fg` (abreviação para _foreground_).
 
 
@@ -546,13 +606,13 @@ a mensagem mais antiga inserida na mailbox). Caso não tenha nenhuma mensagem
 na mailbox, o comando `job recv` fica inativo esperando até que alguma mensagem
 chegue, ou até que este tenha sua execução interrompida (por exempo, por `Ctrl-C`).
 
-A @job_msg mostra um exemplo de uso destes recurso, que permite
-ao sistema esperar uma tarefa de segundo plano terminar.
+A @job_msg mostra um exemplo de uso deste recurso, que permite a possibilidade de
+esperar uma tarefa de segundo plano terminar com algum resultado.
 Neste exemplo, a tarefa computa o número de ocorrências da palavra _"machine"_
 no livro _On the Economy of Machinery and Manufactures_ de Charles Babbage.
 
 #figure([
-```nu
+```bash
 let parent = job id
 
 let id = job spawn {
@@ -568,6 +628,7 @@ let id = job spawn {
 job recv
 ```
 ]) <job_msg>
+// TODO: caption on this
 
 Além disso, o comando `job send` permite que mensagens sejam enviadas com um metadado
 numérico chamado `tag`. Essa tag pode ser utilizada no comando `job recv`, que só vai
@@ -578,8 +639,7 @@ remover da mailbox mensagens que possuam as mesmas tags que as enviadas.
 Adicionalmente, o comando `job flush` foi adicionado, que remove todas as mensagens da mailbox.
 
 // TODO: adicionar comparação com erlang
-
-== Nomeação de Jobs
+// nos detalhes de implementação
 
 Não originalmente planejado na implementação deste trabalho, mas posteriormente
 solicitado por usuários, foi implementado o recurso de adicionar tag/nomes a jobs,
