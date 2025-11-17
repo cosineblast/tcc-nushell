@@ -159,8 +159,12 @@ Um relatório da falta de jobs no projeto e como isso afeta os usuários
 
 *- Capítulo 4: Impacto*
 1. Agradecimentos no Discord
-2. Ocorrências de comandos de job em scripts pela busca no github
+2. Ocorrências de comandos de job em scripts pela busca no Github
 
+// TODO: Lista de figuras
+// TODO: Glossário
+// TODO: adicionar termos em inglês
+// TODO: deixar claro a interoperabilidade de tarefa de segundo plano, background job, job
 
 #pagebreak()
 
@@ -646,8 +650,6 @@ solicitado por usuários, foi implementado o recurso de adicionar tag/nomes a jo
 por meio da flag `--tag` do comando `job spawn`, ou do comando `job tag`, que
 adiciona uma tag a um job existente.
 
-#pagebreak()
-
 == Documentação
 
 Além da implementação destes comandos, também foi escrita a documentação no shell para todos estes, que podem ser acessadas
@@ -683,49 +685,185 @@ Flags:
 )
 
 
+#pagebreak()
+
 = Capitulo 3 \ Detalhes de Implementação
 
-/*
+== Criação de Tarefas por meio de Threads
 
-=== 1. Tarefas em segundo plano, por meio de threads
-Um dos requisitos solicitados pelos usuários do projeto, que tarefas em segundo plano 
-não apenas sejam capazes de executar programas separados, mas também de executar código nushell.
-Como exemplo, o código abaixo em `bash` utiliza do recurso deste shell de realizar operações
-aritméticas, para computar o resultado da expressão 10+20, e salvar este em um arquivo `result.txt`,
-por meio de um background job.
+Diferente do modelo nushell, ambientes POSIX tradicionalmente implementam a maioria de seus comandos
+por meio de programas distintos instalados nos computadores dos usuários, e delegam a menor parte dos comandos
+para a implementação interna dos shells. Desta forma, o modelo natural de 
+tarefas de segundo plano nestes shells, é um em que os jobs são processos separados, dos quais o shell monitora.
 
+Apesar da maioria das operações dos shells POSIX ser implementada por programas separados, estes também costumam
+apresentar alguns recursos implementados diretamente no própio shell (denominados recursos _builtin_), como aritmética
+simples, variáveis, e redirecionamento de saída de comandos para arquivos.
+Os shells POSIX conseguem oferecer o uso destes recursos builtin em tarefas de background, mesmo que estas tarefas
+sejam executadas em processos separados do shell. Na @bash_op_job, um background job é criado para computar o resultado da conta
+`10+20`, e salvar o resultado em um arquivo chamado `result.txt`. Mesmo sem nenhum comando externo sendo executado por
+esta tarefa (`let`, `echo` e `>` são todos _builtin_ do bash), ela ainda assim executa em um processo separado do shell.
+
+Isto é possível graças à syscall `fork` de sistemas POSIX, que cria um processo novo como uma cópia do estado do atual,
+e permite que este processo duplicado continue sua execução em trechos de código dedicados para si. No caso, shells POSIX
+criam uma cópia de si mesmos quando iniciam uma tarefa de segundo plano, e essa cópia segue com a execução dos comandos da
+tarefa.
+// TODO: add syscall to glossary
+
+Este modelo de tarefas de segundo plano baseado em processos externos não se adapta bem ao nushell por dois motivos.
+O primeiro, é por conta do paradigma diferente deste; A maior parte dos comandos não são programas externos, mas sim
+funções _builtin_ do nushell, então operações que não iniciam comandos externos são consideravelmente
+mais comuns.
+
+O segundo, e mais importante motivo, é a ausência da operação syscall `fork` no sistema operacional Windows.
+Como o nushell tem como um de seus principais objetivos providenciar uma experiência multiplataforma até para
+sistemas não POSIX, a dependência de `fork` para este recurso não é uma opção, e foi salientada pelos mantenedores
+no desenvolvimento deste trabalho.
+
+#figure([
 ```bash
-(let result=10+20; echo $result > result.txt) &
+let ten=10
+(let result=$ten+20; echo $result > result.txt) &
 sleep 1
 cat result.txt
 ```
+],
+caption: [Código bash iniciando um background job que realiza múltiplas operações específicas do shell, como
+aritmética, variáveis, e redirecionamento de saída para arquivos.
+Note que a tarefa em background, apesar de ser um processo separado, 
+consegue acessar variáveis locais do shell acessíveis no momento
+de criação da tarefa, já que o processo novo é uma cópia do original.]
+) <bash_op_job>
 
-Para dar suporte a este recurso, o a implementação realizada neste trabalho
-utiliza de threads para implementar
-tarefas de segundo plano, ou seja, cada job é definido por uma thread distinta.
+// TODO: adicionar diagramas
 
-Em sistemas operacionais POSIX, uma alternativa é a utilização da _syscall_ `fork` para
-iniciar uma cópia do processo atual, ao invés de iniciar uma nova thread. É desta forma,
-que atividades em segundo plano são implementadas em shells tradicionais.
-Isto não é uma opção viável para o projeto nushell, pois este é multiplataforma,
-e não existe nenhuma _syscall_ equivalente a esta
-no sistema operacional Windows. Logo, o modelo de implementação de tarefas em segundo
-plano escolhido foi o de threads.
+Desta maneira, este trabalho optou por implementar as tarefas de segundo plano utilizando _threads_,
+trechos de código que executam de maneira simultânea em um mesmo processo.
+Assim, cada job é implementado por uma thread separada.
 
-O código abaixo em nushell replica o comportamento do código bash apresentado acima.
+\
+\
 
-```bash
-job spawn { let result = 10 + 20; $result | save result.txt }
-sleep 1sec
-open result.txt
+== Compartilhamento de Estado entre threads
+
+O projeto nushell é implementado na linguagem de programação Rust, que tem como
+ um de seus principais objetivos facilitar a criação de programas multithreaded
+corretos e seguros. Isto ajudou consideravelmente a implementação inicial de multithreading no projeto.
+
+Um exemplo de política da linguagem que facilita a implementação de programas
+deste tipo, é o fato da linguagem por padrão proibir a criação de variáveis globais mutáveis, incentivando
+o uso de structs passadas como argumento para subrotinas para implementar estado compartilhado.
+Em nushell, isso se dá por meio das structs `EngineState` e `Stack`, que guardam todo o estado mutável do
+interpretador, como símbolos e variáveis locais.
+Nesta implementação, o estado guardado nessas structs é clonado para cada thread nova inicializada,
+para que o estado das múltiplas threads não interfiram entre si.
+
+A linguagem de programação Rust permite que threads compartilhem estado mutavel entre si,
+por meio das structs `Arc` e `Mutex`.
+A struct `Arc` permite que um valor seja acessado por múltiplas threads,
+e guarda internamente o número de referências ao valor, para que quando todas
+as threads parem de usar o valor, a memória dele seja dealocada.
+#footnote([
+  Nesta implementação, os valores guardados dentro do `Arc` vivem pelo tempo
+  de vida da aplicação toda, então o uso de contagem de refências pode ser
+  considerado desnecessário, e o tipo `&'static` (que se refere
+  a um valor que existe por todo o tempo da aplicação) poderia ser utilizado.
+  Neste trabalho, `Arc` foi optado por ser o estilo mais comum para a resolução
+  deste problema na linguagem Rust, deixando a possível otimização no uso de `&'static`
+  para uma continuação futura deste trabalho.
+])
+Um valor mantido dentro de um `Arc`, pode ser lido por várias threads, mas por padrão,
+não pode ser modificado por nenhuma delas, para garantir que só exista no máximo uma referência
+mutável por valor, e evitar problemas de concorrência.
+
+Para permitir que os valores também possam ser modificados, a linguagem providencia a
+struct `Mutex`, que permite apenas uma thread acessar o valor mutável por vez.
+Quando múltiplas threads tentam acessar o valor mutável ao mesmo tempo, uma delas
+é concedida o acesso, e as outras precisam esperar.
+
+Os tipos `Arc` e `Mutex` da linguagem Rust foram utilizados
+na struct `EngineState` -- que mantém o estado principal do interpretador --
+para guardar a lista de tarefas atualmente sendo executadas no processo (veja @arc_mutex_jobs).
+
+#figure([
+```rs
+  struct EngineState {
+    // ...
+    pub jobs: Arc<Mutex<Jobs>>
+  }
 ```
-// TODO: fazer ilustrações mostrando a diferença entre os dois modelos
+],
+caption: [Estado mutável compartilhado para a lista de tarefas na struct `EngineState`.
+`Arc` garante que o mesmo valor pode ser acessado entre diferentes threads, e `Mutex` permite
+que este valor seja mutável.]
+) <arc_mutex_jobs>
+
+A struct `Jobs` introduzida ao projeto, e mantida no `EngineState`
+consiste essencialmente de uma tabela de hash mapeando os IDs do jobs à
+ suas informações.
+Quando uma tarefa de background é iniciada pelo comando `job spawn`, esta
+tabela é modificada para inserir os dados da nova tarefa em execução, e quando
+esta thread termina, essa informação é removida da tabela.
+
+
+== Listagem de PIDs e Algorítmo de Remoção de Jobs
+
+A cada cópida da struct `EngineState` mantida pelas threads possui internalmente um
+valor do tipo `AtomicBool`, que representa um valor booleano
+modificável entre várias threads
+(funcionalmente idêntico a `Mutex<bool>`, porém mais eficiente). Esta booleana
+mutável é utilizada para determinar se o interpretador foi interrompido externalmente,
+por ações como Ctrl-C.
+Intencionalmente modificando este valor booleano
+associado ao `EngineState` de algum job, é possível então interromper o continuamento deste. É desta forma que o comando `job kill` opera, ativando o `AtomicBool` de interupção da tarefa
+a ser interrompida na tabela `Jobs` compatilhada entre as threads.
+
+Durante a inicialização de um job, é criada uma lista de inteiros compartilhada
+(por meio de `Arc` e `Mutex`) que mantém a lista de PIDs usados por este job
+Quando a thread da tarefa executa algum comando externo e cria um processo novo,
+ela adiciona o ID deste processo à esta lista, permitindo que diferentes
+jobs possam inspecionar os processos sendo executados por outros jobs.
+
+Um dos objetivos do comportamento do comando `job kill`, é não apenas
+parar a execução de futuros comandos da tarefa a ser interompida, mas também
+enviar sinais de morte para cada um dos processos atualmente ativos por esta
+tarefa.
+
+Esta situação é acompanhada de um possível problema de sincronização.
+
+// TODO: add PID to glossary
+/*
+
+[X] Spawn de jobs:
+[X] Falar de closures, da struct EngineState, comandos experimentais, e do comando `job spawn`.
+[X] Falar da tabela de jobs, salva por um mutex compartilhado entre as `EngineState`s, falar do modelo de exclusão de acesso da linguagem Rust.
+[X] Falar de como o id do primeiro job é o zero.
+
+. Assasinato de jobs
+Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
+que falta da falta da documentação desse detalhe.
+
+. TSTP e Ctrl-Z
+Falar do manual da GNU que eu li, quais syscalls foram usadas, UnfreezeHandle etc.
+Falar de process groups, e do commit (per-pipelines)[https://github.com/nushell/nushell/pull/14883/commits/267b092c7954b2100df0fdab3b6ef9668aeee240].
+
+. Saída do program e aviso na saída
+Falar de como foi implementado o esquema de avisar o usuário se ele tentar sair do shell enquanto tem algum job na tabela.
+Falar de como o programa se comporta quando o shell termina e ainda tem jobs rodando (matar ou não matar os processos?)
+Falar de como o programa não mostra a saída dos procesoss por padrão, mas ainda permite que comandos que explicitamente printam coisas na tela funcionem (print).
+
+. Alterações que sairam de escopo
+Falar da ideia do `job dispatch`, de como ele é mais ou menos desncessário (job spawn meio que serve)
+
+== Pull Request  \#15253 - "Inter-Job Direct Messaging"
+
+// Falar bla bla bla detalhes Erlang.
+
 */
 
-#pagebreak()
-
 // TODO: falar do lance de sair do shell mostrar uma mensagem de aviso.
-
+// 
+#pagebreak()
 = Capitulo 4 \ Impacto
 
 == Feedback direto dos Usuários
@@ -757,15 +895,15 @@ com o autor descrevendo seu contento com o que foi realizado.
  #image("thx.png"),
  #image("way_to_go.png"),
 ],
- caption: [Feedbacks positivos de mantenedores e usuários no chat Discord e github do nushell depois de
+ caption: [Feedbacks positivos de mantenedores e usuários no chat Discord e Github do nushell depois de
 terminadas as PRs. ]
 ) <omg>
 
 
 == Uso em repositórios públicos
 
-A plataforma Github possui uma #link("")[ferramenta de busca] que permite que textos
-específicos sejam buscadas em repositórios públicos. Com isso, podemos procurar instâncias de uso do termo `job spawn`
+A plataforma Github possui uma #link("")[ferramenta de busca] que permite a busca de textos
+em repositórios públicos. Com isso, podemos procurar instâncias de uso do termo `job spawn`
 em arquivos nushell. Realizando uma busca por arquivos de extensão `.nu` (de scripts nushell), que contém o termo `job spawn`,
 obtemos 113 arquivos, de múltiplos usuários diferentes.
 
@@ -794,98 +932,3 @@ para diversos propósitos.
 
 
 
-
-/*
-
-=== 2. Tarefas em segundo plano baseadas em processos
-
-Shells tradicionais mantém registro de todas as tarefas de segundo plano iniciadas,
-para, por exemplo, que o usuário do shell possa se informar de quais jobs ainda estão executando,
-e avisar se o usuário tentar terminar o shell enquanto algum job ainda está em andamento.
-Entretanto, caso o usuário queira iniciar um processo em segundo plano, e não queira que o shell
-mantenha registro deste processo, shells POSIX permitem que o shell remova os
-registros internos de um processo em segundo plano, por meio do comando `disown`.
-
-Além de tarefas em segundo plano baseadas em threads, a primeira PR também planejava
-permitir que os usuários iniciassem processos específicos em segundo plano sem que
-o shell mantenha registro destes processos, equivalente a executar `disown` após
-inicar o processo. Esta tarefa foi determinada como fora do escopo da implementação
-inicial, e não implementada. A issue #link("https://github.com/nushell/nushell/issues/15200")[\#15200]
-do projeto foi criada para representar a demanda por este recurso.
-
-=== 3. Comunicação entre threads por meio de _Communicating Sequential Processes_
-
-A escolha de threads para a implementação de background jobs abre oportunidade
-para a adição de mecanismos de comunicação entre threads à linguagem,
-permitindo que scripts em nushell possam implementar algorítmos paralelos.
-
-
-*/
-
-/*
-== Detalhes de Implementação da PR
-
-=== Criação de Jobs
-
-O projeto nushell é implementado na linguagem de programação Rust, que tem como
- um de seus principais objetivos a facilitação na implementação de programas multi-threaded
-seguros. Isto facilitou consideravelmente a implementação inicial de multithreading no projeto.
-
-Um exemplo de políticas da linguagem que facilitam a implementação de programas
-multithreaded, é o fato da linguagem por padrão proibir a criação de variáveis globais mutáveis, incentivando
-o uso de structs passadas como argumento para subrotinas para implementar estado compartilhado.
-Em nushell, isso se dá por meio das structs `EngineState` e `Stack`, que guardam todo o estado mutável da
-thread principal, como símbolos e variáveis locais.
-
-Na implementação deste trabalho, essas structs são clonada para cada thread nova inicializada,
-para que o estado das múltiplas threads não interfiram entre sí.
-
-Para a criação de jobs, foi adicionado o comando `job spawn`, que recebe uma função/closure
-e executa esta em uma nova thread. // TODO: falar do ID retornado pelo job spawn
-
-...
-
-// Dúvida: Vale mais a pena documentar as coisas como foram feitas, ou será que é melhor documentar o resultado final?
-// Acho que vou falar das coisas na ordem que foram implementadas,  mas falar dos designs finais desses recursos implementados,
-// e salientar mudanças de design importantes, como CSP vs Actor Model.
-- Alterações implementadas:
-
-[X] Spawn de jobs:
-Falar de closures, da struct EngineState, comandos experimentais, e do comando `job spawn`, e tratamento de erros.
-falar de como posteriormente, o job spawn foi modificado para que este retorne o id do job spawnado.
-
-. Listagem de jobs
-Falar da tabela de jobs, salva por um mutex compartilhado entre as `EngineState`s, falar do modelo de exclusão de acesso da linguagem Rust.
-Falar de como o id do primeiro job é o zero.
-
-. Assasinato de jobs
-Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
-que falta da falta da documentação desse detalhe.
-
-. TSTP e Ctrl-Z
-Falar do manual da GNU que eu li, quais syscalls foram usadas, UnfreezeHandle etc.
-Falar de process groups, e do commit (per-pipelines)[https://github.com/nushell/nushell/pull/14883/commits/267b092c7954b2100df0fdab3b6ef9668aeee240].
-
-. Saída do program e aviso na saída
-Falar de como foi implementado o esquema de avisar o usuário se ele tentar sair do shell enquanto tem algum job na tabela.
-Falar de como o programa se comporta quando o shell termina e ainda tem jobs rodando (matar ou não matar os processos?)
-Falar de como o programa não mostra a saída dos procesoss por padrão, mas ainda permite que comandos que explicitamente printam coisas na tela funcionem (print).
-
-. Alterações que sairam de escopo
-Falar da ideia do `job dispatch`, de como ele é mais ou menos desncessário (job spawn meio que serve)
-
-== Pull Request  \#15253 - "Inter-Job Direct Messaging"
-
-// Falar bla bla bla detalhes Erlang.
-
-= Capítulo 3
-= Resultado e Impacto
-
-Falar de como o projeto foi bem vindo, e falar de depoimentos e agradecimentos que a galera no github e discord falou da contribuição.
-
-
-// glossário:
-// PR - Pull Request
-// TODO: adicionar termos em inglês
-// TODO: deixar claro a interoperabilidade de tarefa de segundo plano, background job, job
-*/
