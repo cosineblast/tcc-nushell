@@ -648,6 +648,41 @@ adiciona uma tag a um job existente.
 
 #pagebreak()
 
+== Documentação
+
+Além da implementação destes comandos, também foi escrita a documentação no shell para todos estes, que podem ser acessadas
+pela flag `--help` em cada comando, ou pelo uso do comando `help`. Também foi providenciado um comando `job` que
+lista todos os comandos de controle de tarefas implementados.
+
+#figure([
+```
+Various commands for working with background jobs.
+
+You must use one of the following subcommands. Using this command as-is will only produce this help message.
+
+Usage:
+  > job
+
+Subcommands:
+  job flush - Clear this job's mailbox.
+  job id - Get id of current job.
+  job kill - Kill a background job.
+  job list - List background jobs.
+  job recv - Read a message from the mailbox.
+  job send - Send a message to the mailbox of a job.
+  job spawn - Spawn a background job and retrieve its ID.
+  job tag - Add a description tag to a background job.
+  job unfreeze - Unfreeze a frozen process job in foreground.
+  job unfreeze (alias) - Alias for job unfreeze
+
+Flags:
+  -h, --help: Display the help message for this command
+```
+],
+  caption: [Saída do comando `job`, que lista todos os comandos de controle de tarefas. ]
+)
+
+
 = Capitulo 3 \ Detalhes de Implementação
 
 /*
@@ -689,7 +724,75 @@ open result.txt
 
 #pagebreak()
 
+// TODO: falar do lance de sair do shell mostrar uma mensagem de aviso.
+
 = Capitulo 4 \ Impacto
+
+== Feedback direto dos Usuários
+
+As contribuições desenvolvidas neste trablaho já foram aceitas no projeto nushell, por meio
+das Pull Requests \#14883 e \#15253. A primeira implementa tarefas de segundo plano e Ctrl-Z, enquanto a segunda
+implementa comunicação entre tarefas.
+
+Durante o desenvolvimento da PR principal, esta já tinha 16 reações positivas
+de usuários entusiasmados com o desenvolvimento no Github.
+Antes mesmo da implementação estar completa, a PR já
+tinha usuários testando os recursos implementados, e providenciando feedback positivo.
+A @pr_feedback mostra um comentário de um usuário satisfeito com o comportamento do Ctrl-Z adicionado.
+// TODO: add PR to glossary
+
+#figure([
+ #image("pr_feedback.png"),
+],
+ caption: [Feedback positivo de um usuário nos comentários da PR principal, mesmo em um estado prematuro desta]
+) <pr_feedback>
+
+Após o fim do trabalho, este foi parabenizado por
+mantenedores, e múltiplos usuários entraram em contato
+com o autor descrevendo seu contento com o que foi realizado.
+
+#figure([
+ #image("omg.png"),
+ #image("tag.png"),
+ #image("thx.png"),
+ #image("way_to_go.png"),
+],
+ caption: [Feedbacks positivos de mantenedores e usuários no chat Discord e github do nushell depois de
+terminadas as PRs. ]
+) <omg>
+
+
+== Uso em repositórios públicos
+
+A plataforma Github possui uma #link("")[ferramenta de busca] que permite que textos
+específicos sejam buscadas em repositórios públicos. Com isso, podemos procurar instâncias de uso do termo `job spawn`
+em arquivos nushell. Realizando uma busca por arquivos de extensão `.nu` (de scripts nushell), que contém o termo `job spawn`,
+obtemos 113 arquivos, de múltiplos usuários diferentes.
+
+#figure([
+  #image("job_spawn_search.png"),
+], caption: [Resultado da busca `path:*.nu "job spawn"` na busca avançada do Github, devolvendo 113 arquivos])
+
+Buscando por ocorrências de "`job unfreeze`" e `fg`, obtemos ocorrências em cerca de 50 arquivos públicos diferentes,
+em que usuários vindos de shells POSIX configuram o comando familiar `fg` para `job unfreeze`.
+
+#figure([
+  #image("job_unfreeze_search.png"),
+], caption: [Resultado da busca `path:*.nu "job unfreeze" fg` na busca avançada do Github, devolvendo 48 arquivos])
+
+Mesmo recursos argumentavelmente menos relevantes, como `job send` e `job recv` são
+utilizados em scripts públicos desenvolvidos pela comunidade. Em particular, um usuário escreveu uma
+#link("https://github.com/nushell/nu_scripts/blob/main/games/paperclips/game.nu")[cópia] do jogo
+universal paperclips em nushelll, utilizando os comandos `job send` e `job recv` para realizar comunicação entre diferentes
+partes do jogo.
+
+Com essas informações, podemos concluir que os recursos implementados
+neste trabalho já estão sendo utilizados por dezenas de usuários diferentes,
+para diversos propósitos.
+
+== Planos futuros
+
+
 
 
 /*
