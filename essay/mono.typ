@@ -3,6 +3,7 @@
 #let towork(thing) = thing
 
 #import "stuff.typ": template
+#import "@preview/algo:0.3.6": algo, i, d, comment, code
 
 #show: template
 
@@ -748,7 +749,7 @@ Assim, cada job é implementado por uma thread separada.
 
 O projeto nushell é implementado na linguagem de programação Rust, que tem como
  um de seus principais objetivos facilitar a criação de programas multithreaded
-corretos e seguros. Isto ajudou consideravelmente a implementação inicial de multithreading no projeto.
+corretos e seguros. Isto ajudou consideravelmente a implementação de multithreading no projeto.
 
 Um exemplo de política da linguagem que facilita a implementação de programas
 deste tipo, é o fato da linguagem por padrão proibir a criação de variáveis globais mutáveis, incentivando
@@ -758,11 +759,11 @@ interpretador, como símbolos e variáveis locais.
 Nesta implementação, o estado guardado nessas structs é clonado para cada thread nova inicializada,
 para que o estado das múltiplas threads não interfiram entre si.
 
-A linguagem de programação Rust permite que threads compartilhem estado mutavel entre si,
+A linguagem de programação Rust permite que threads explicitamente compartilhem estado mutavel,
 por meio das structs `Arc` e `Mutex`.
 A struct `Arc` permite que um valor seja acessado por múltiplas threads,
 e guarda internamente o número de referências ao valor, para que quando todas
-as threads parem de usar o valor, a memória dele seja dealocada.
+as threads parem de usar o valor, a memória usada por ele seja liberada.
 #footnote([
   Nesta implementação, os valores guardados dentro do `Arc` vivem pelo tempo
   de vida da aplicação toda, então o uso de contagem de refências pode ser
@@ -778,7 +779,8 @@ mutável por valor, e evitar problemas de concorrência.
 
 Para permitir que os valores também possam ser modificados, a linguagem providencia a
 struct `Mutex`, que permite apenas uma thread acessar o valor mutável por vez.
-Quando múltiplas threads tentam acessar o valor mutável ao mesmo tempo, uma delas
+Quando múltiplas threads tentam acessar o valor mutável ao mesmo tempo,
+apenas uma delas
 é concedida o acesso, e as outras precisam esperar.
 
 Os tipos `Arc` e `Mutex` da linguagem Rust foram utilizados
@@ -808,30 +810,134 @@ esta thread termina, essa informação é removida da tabela.
 
 == Listagem de PIDs e Algorítmo de Remoção de Jobs
 
-A cada cópida da struct `EngineState` mantida pelas threads possui internalmente um
-valor do tipo `AtomicBool`, que representa um valor booleano
-modificável entre várias threads
-(funcionalmente idêntico a `Mutex<bool>`, porém mais eficiente). Esta booleana
+Toda cópia da struct `EngineState` mantida pelas threads possui internalmente um
+valor do tipo `Arc<AtomicBool>`, que representa um valor booleano
+modificável por várias threads
+(`AtomicBool` é funcionalmente idêntico a `Mutex<bool>`, porém mais eficiente). Esta booleana
 mutável é utilizada para determinar se o interpretador foi interrompido externalmente,
 por ações como Ctrl-C.
 Intencionalmente modificando este valor booleano
-associado ao `EngineState` de algum job, é possível então interromper o continuamento deste. É desta forma que o comando `job kill` opera, ativando o `AtomicBool` de interupção da tarefa
+associado ao `EngineState` de algum job, é possível então interromper o continuamento deste. É desta forma que o comando `job kill` opera, ativando o `AtomicBool` de interrupção da tarefa
 a ser interrompida na tabela `Jobs` compatilhada entre as threads.
 
-Durante a inicialização de um job, é criada uma lista de inteiros compartilhada
-(por meio de `Arc` e `Mutex`) que mantém a lista de PIDs usados por este job
+Durante a inicialização de uma tarefa, é criada uma lista de inteiros compartilhada
+(por meio de `Arc` e `Mutex`) que mantém a lista de PIDs usados por esta tarefa.
 Quando a thread da tarefa executa algum comando externo e cria um processo novo,
-ela adiciona o ID deste processo à esta lista, permitindo que diferentes
-jobs possam inspecionar os processos sendo executados por outros jobs.
+ela adiciona o ID deste processo a esta lista, permitindo que diferentes
+threads possam inspecionar os processos sendo executados pelas tarefas.
 
 Um dos objetivos do comportamento do comando `job kill`, é não apenas
 parar a execução de futuros comandos da tarefa a ser interompida, mas também
 enviar sinais de morte para cada um dos processos atualmente ativos por esta
 tarefa.
 
-Esta situação é acompanhada de um possível problema de sincronização.
+Esta situação é acompanhada de um possível problema de sincronização,
+caso uma thread tente inserir um PID em sua lista de PIDs ao
+mesmo tempo que outra thread tenta interromper a primeira.
 
-// TODO: add PID to glossary
+#let register= [#smallcaps("SpawnAndRegister")]
+#let kill = [#smallcaps("KillAll")]
+
+Na @kill_algo, é descrito o algorítmo #register desenvolvido para registrar processos
+na lista de processos de uma tarefa, e o algorítmo #kill
+utilizado para interromper uma tarefa, matando os processos iniciados
+por esta.
+
+#figure([
+
+  #grid(
+    columns: (1fr, 1fr),
+    [
+      #algo(
+        title: "SpawnAndRegister",
+        parameters: ()
+      )[
+        let _pid_ $arrow.l$ SPAWN_PROCESS()\
+        LOCK(Mutex)\
+        
+        if Interrupted = 1:#i\
+          KILL(_pid_)#d\
+        else:#i\
+          INSERT(_pid_, Pids)#d\
+        UNLOCK(Mutex)
+      ]
+
+    ],
+    [
+      #algo(
+        title: "KillAll",
+        parameters: ()
+      )[
+        Interrupted $arrow.l$ 1 \
+        LOCK(Mutex)\
+        for _pid_ in Pids:#i\
+          KILL(_pid_)#d\
+        Pids = []\
+        UNLOCK(Mutex)
+      ]
+    ]
+  )
+],
+caption: [
+Definição dos algoritmos #register e #kill.
+Variáveis locais são definidas em itálico (e.g _pid_), variáveis globais/compartilhadas
+são definidas com o primeiro caracter em caixa alta (e.g Interrupted),
+e funções externas são definidas em caixa alta completa (e.g LOCK).
+Apesar de serem acessíveis por diferentes threads, existe uma cópia
+das variáveis globais (Interrupted, Mutex, Pids)
+deste algorítmo para cada tarefa.
+]
+) <kill_algo>
+
+Neste cenário, a função #register é executada pela thread da tarefa quando
+esta deseja iniciar e registar um processo novo, enquanto a função #kill é
+executada por outra thread, desejando interromper a primeira e matar
+seus processos. Aqui denoninaremos a thread iniciando o processo
+como thread A, e a thread matando os processos como thread B.
+
+Mesmo que estas rotinas sejam executadas concorrentemente, é garantido
+que os processos na variável `Pids` serão mortos, e o processo
+iniciado pela thread A será morto. Isto ocorre,
+porque a semântica do mutex garante que no máximo uma thread
+irá executar um bloco de código protegido pelas chamadas lock e unlock em qualquer
+momento de tempo, o que garante uma das duas seguintes possibilidades:
+
+
+1. A thread A adquire o lock primeiro.
+Neste caso, no momento em que a thread A chega na linha 3, a variável `Interrupted` pode estar tanto em 0 quanto em 1,
+já que não sabemos se a thread B já chegou na linha 1. Se `Interrupted` for
+1, o processo iniciado será morto explicitamente pela thread A.
+
+- Se `Interrupted` for 0:
+A linha 6 de #register executa, e PID será colocado na lista `Pids`.
+Como a thread A adquiriu o lock primeiro, a thread B irá adquirir o lock
+posteriormente, e matar este processo da lista, junto dos outros processos.
+
+- Se `Interrupted` for 1: 
+O processo será morto explicitamente. A thread B irá posteriormente
+adquirir o lock, e os outros processos serão removidos.
+
+Em ambos os casos, todos os processos são mortos, incluindo o processo
+recém criado.
+
+2.  A thread B adquire o lock primeiro.
+Neste caso, os processos na lista `Pids` são removidos e mortos pela thread
+B primeiro. Quando a thread A adquire o mutex, é garantido
+que a variável Interrupted já tem 1 como valor
+#footnote([
+  A linguagem de programação Rust atualmente não documenta as semânticas de _Acquire-Release_ do tipo `Mutex`,
+  que garantem que ao realizar um `LOCK`, os valores da memória escritos
+  pela última thread que realizou `UNLOCK` já serão visíveis à thread
+  realizando o `UNLOCK`.
+  Isto é um "bug na documentação" do projeto, apresentado na issue
+  #link("https://github.com/rust-lang/rust/issues/126239")[\#126239]
+  do repositório da linguagem.
+]), então esta thread irá matar o processo recém nascido.
+
+Em ambos os casos, todos os processos -- incluindo o processo a ser
+registrado -- são mortos corretamente.
+
+
 /*
 
 [X] Spawn de jobs:
@@ -840,7 +946,7 @@ Esta situação é acompanhada de um possível problema de sincronização.
 [X] Falar de como o id do primeiro job é o zero.
 
 . Assasinato de jobs
-Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
+[X] Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
 que falta da falta da documentação desse detalhe.
 
 . TSTP e Ctrl-Z
