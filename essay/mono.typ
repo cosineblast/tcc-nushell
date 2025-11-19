@@ -186,7 +186,7 @@ que podem ser executados de forma não interativa
 para automatizar tarefas.
 
 Os shells mais tradicionais usados por usuários técnicos
-de sistemas derivados de Unix (como Linux e macOS) são
+de sistemas derivados de UNIX (como Linux e macOS) são
 denominados shells POSIX, sendo o maior representante desta
 categoria o shell GNU Bash. Nestes shells, um recurso
 ubíquo é a capacidade de concatenar a saída textual de
@@ -745,7 +745,7 @@ Assim, cada job é implementado por uma thread separada.
 \
 \
 
-== Compartilhamento de Estado entre threads
+== Compartilhamento de estado entre threads
 
 O projeto nushell é implementado na linguagem de programação Rust, que tem como
  um de seus principais objetivos facilitar a criação de programas multithreaded
@@ -808,7 +808,7 @@ tabela é modificada para inserir os dados da nova tarefa em execução, e quand
 esta thread termina, essa informação é removida da tabela.
 
 
-== Listagem de PIDs e Algorítmo de Remoção de Jobs
+== Listagem de PIDs e algorítmo de remoção de tarefas
 
 Toda cópia da struct `EngineState` mantida pelas threads possui internalmente um
 valor do tipo `Arc<AtomicBool>`, que representa um valor booleano
@@ -936,6 +936,85 @@ que a variável Interrupted já tem 1 como valor
 
 Em ambos os casos, todos os processos -- incluindo o processo a ser
 registrado -- são mortos corretamente.
+
+== Ctrl-Z e grupos de processos em UNIX
+Nos sistemas operacionais baseados em UNIX (aqui denominados de sistemas POSIX),
+um processo é automaticamente
+suspenso pelo sistema operacional quando recebe o sinal `SIGTSTP`.
+Este sinal é tradicionalmente emitido pelo terminal quando
+a sequência Ctrl-Z é digitada pelo usuário. Logo, para lidar com este
+evento, a implementação precisou tratar este sinal.
+
+Os sistemas POSIX possuem o conceito de grupo de processos. Estes grupos
+permitem que vários processos sejam sinalizados de uma só vez.
+Além disso, grupos de processos são utilizados pelo sistema operacional
+para decidir quais processos podem escrever diretamente no terminal ativo ou não.
+
+Quando o nushell cria um processo para executar um comando externo em
+sistemas POSIX,  o shell cria um grupo de processos para a pipeline do processo,
+e a syscall `tcsetpgrp` é utilizada para ceder a este processo o controle
+do terminal. Após isso, o shell espera este processo ser terminado, interrompido, ou congelado,
+por meio da syscall `waitpid`.
+Quando `waitpid` indica que o processo foi congelado, o shell registra o PID do processo é
+na tabela compartilhada de tarefas discutida anteriormente,
+e o controle do terminal é retomado para o shell, com a syscall `tcsetpgrp`.
+
+O comando `job unfreeze` adquire acesso à tabela compartilhada de jobs,
+remove o registro do processo congelado associado nesta tabela,
+coloca este processo no controle do terminal, antes de
+descongelar o processo, enviando para este o sinal `SIGCONT`
+por meio da syscall `kill`.
+
+Para acomodar ambos os tipos de tarefas (threads e processos congelados) na
+tabela de tarefas, foi utilizado o recurso de tipos soma por meio
+de `enums` da linguagem Rust, como exibido na @job_type.
+Valores do tipo `Job` podem pertencer à variante `Thread`, e conter um `ThreadJob`,
+que guarda dados como a lista de PIDs da thread,
+ou pertencer à variante `Frozen`, que guarda um `FrozenJob`, que consiste
+essencialmente do PID do processo congelado.
+O tipo de uma tarefa pode ser determinado para o usuário utilizando
+o comando `job list`, na coluna "`type`", que devolve a string "`thread`"
+para tarefas de thread iniciadas por `job spawn`, e "`frozen`" para
+tarefas suspensas por `SIGTSTP`.
+
+
+#figure([
+#grid(
+  columns: (1fr, 1fr),
+  [
+    
+```rs
+pub enum Job {
+    Thread(ThreadJob),
+    Frozen(FrozenJob),
+}
+  
+```
+
+  ],
+  [
+    
+```rs
+fn find_job_type(job: &Job) -> String {
+  match job {
+    Thread(_) => "thread",
+    Frozen(_) => "frozen"
+  }
+}
+```
+  ]
+)
+],
+caption: [ Definição do tipo `Job` guardado na tabela compartilhada de tarefas.
+Esta definição permite que valores do tipo `Job` possam ser utilizados
+tanto para guardar valores do tipo `ThreadJob` quanto do tipo `FrozenJob`.
+A listagem à direita mostra um exemplo de verificação de qual variante um
+valor do tipo `Job` pertence, para produzir uma string com o tipo
+da tarefa apresentado por `job list`.
+ ]
+) <job_type>
+
+== Comunicação entre Threads
 
 
 /*
