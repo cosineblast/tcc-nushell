@@ -101,9 +101,6 @@ em Linux e MacOS.
 
 #pagebreak()
 
-#pagebreak()
-
-
 #my_summary_page(
   title: [ *Abstract* ],
   reference: [
@@ -124,6 +121,20 @@ This undergraduate thesis project consists of the implementation and documentati
   *Keywords*: Shell, Background jobs.
   ]
 )
+
+#pagebreak()
+
+= Lista de Figuras
+
+Em progresso.
+// TODO
+
+#pagebreak()
+
+= Lista de abreviaturas
+
+Em progresso.
+// TODO
 
 #pagebreak()
 
@@ -159,9 +170,10 @@ Um relatório da falta de jobs no projeto e como isso afeta os usuários
 2. Ocorrências de comandos de job em scripts pela busca no Github
 
 // TODO: Lista de figuras
-// TODO: Glossário
 // TODO: adicionar termos em inglês
 // TODO: deixar claro a interoperabilidade de tarefa de segundo plano, background job, job
+
+#pagebreak()
 
 #pagebreak()
 
@@ -1211,9 +1223,11 @@ Com essas informações, podemos concluir que os recursos implementados
 neste trabalho já estão sendo utilizados por dezenas de usuários diferentes,
 para diversos propósitos.
 
-== Planos futuros
 
-TODO: Detalhar esta parte
-- Implementar recursos adicionais que os usuários sugeriram (olhar categoria job-control de issues no nushell)
-- Resolver bugs que usuários encontraram
+#pagebreak()
+
+= Referências
+
+Em progresso.
+// TODO
 
