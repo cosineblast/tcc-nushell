@@ -579,13 +579,15 @@ O modelo de comunicação entre tarefas implementado foi inspirado no da linguag
 funcional Erlang, inspirado por sua vez no modelo de computação concorrente baseado em
 #link("https://en.wikipedia.org/wiki/Actor_model")[atores].
 
+#let fifo = [First-In-First-Out]
+
 No modelo implementado, cada job possui uma lista interna de valores denominada sua "caixa de entrada"
 ou _mailbox_. Dado o ID de um job, é possível enviar uma mensagem para este
 (ou seja, adicionar uma mensagem à sua mailbox), utilizando o comando
 `job send`, informando o valor a ser enviado, e o ID do destinatário. Qualquer valor
 pode ser enviado.
 Um job pode verificar as mensagens em sua mailbox utilizando o comando `job recv`, que
-retira uma mensagem da mailbox, em estilo First-In-First-Out (ou seja, ele retira
+retira uma mensagem da mailbox, em estilo #fifo (ou seja, ele retira
 a mensagem mais antiga inserida na mailbox). Caso não tenha nenhuma mensagem
 na mailbox, o comando `job recv` fica inativo esperando até que alguma mensagem
 chegue, ou até que este tenha sua execução interrompida (por exempo, por `Ctrl-C`).
@@ -884,8 +886,7 @@ momento de tempo, o que garante uma das duas seguintes possibilidades:
 
 1. A thread A adquire o lock primeiro.
 Neste caso, no momento em que a thread A chega na linha 3, a variável `Interrupted` pode estar tanto em 0 quanto em 1,
-já que não sabemos se a thread B já chegou na linha 1. Se `Interrupted` for
-1, o processo iniciado será morto explicitamente pela thread A.
+já que não sabemos se a thread B já chegou na linha 1.
 
 - Se `Interrupted` for 0:
 A linha 6 de #register executa, e PID será colocado na lista `Pids`.
@@ -916,7 +917,8 @@ que a variável Interrupted já tem 1 como valor
 Em ambos os casos, todos os processos -- incluindo o processo a ser
 registrado -- são mortos corretamente.
 
-== Ctrl-Z e grupos de processos em UNIX
+== Ctrl-Z em UNIX
+
 Nos sistemas operacionais baseados em UNIX (aqui denominados de sistemas POSIX),
 um processo é automaticamente
 suspenso pelo sistema operacional quando recebe o sinal `SIGTSTP`.
@@ -995,76 +997,155 @@ da tarefa apresentado por `job list`.
 
 == Comunicação entre Threads
 
-A ideia original para a implementação de comunicação entre jobs
-era a 
-utilizando o modelo de interação concorrnte
+=== Communicating Sequantial Processes
+
+A ideia original para a implementação de comunicação entre jobs em nushel
+era utilizando o modelo de interação concorrnte
 #link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
-  Communicating Sequantial Processes
+  _Communicating Sequantial Processes_
 ] (CSP), de Tony Hoare,
-que também inspirou o design das linguagens `OCaml`, `Go`, `Rust`, e `Clojure`.
-Neste modelo, seria implementado um tipo de dado mutável denominado 'canal', que poderia
-ser compartilhado entre jobs, do qual o envio de mensagens seria possível por meio de comandos
-como `channel send` e `chanel recv`.
+que também inspirou o design de concorrência das linguagens OCaml, Go, Rust, e Clojure.
+Nesta seção é descrito em termos gerais, como este modelo tradicionalmente
+se manifesta nestas implementações. Algums conceitos variam de linguagem
+para linguagem, mas a estrutura geral é a mesma.
+
+#let send = smallcaps("Send")
+#let recv = smallcaps("Recv")
+#let close = smallcaps("Close")
+#let select = smallcaps("Select")
+
+Em CSP, a comunicação ocorre por meio de objetos denominados canais, que
+são compartilhados entre as threads. Canais disponibilizam três operações atômicas distintas:
+#send, #recv, e #close.
+A operação #send$(k, v)$ permite que uma thread envie/adicione um valor (vulgo mensagem) $v$
+a um canal $k$,
+a operação #recv$(k)$ permite que uma thread obtenha acesso a algum valor enviado
+ao canal $k$, e a operação #close$(k)$ impede que mensagens futuras sejam enviadas
+ao canal $k$ usando #send. Não há restrição geral sobre quais valores podem ser enviados
+por canais, incluindo valores referenciando outros canais.
+Entretanto, linguagens estaticamente
+tipadas tradicionalmente impõem um tipo de dado por canal (ou seja,
+um canal que transmite _strings_ não pode transmitir inteiros, e vice-versa).
+
+Além disso, todo canal $k$ possui uma capacidade interna, definida
+por um inteiro não negativo $n_k$. Canais com capacidades $n_k > 0$ são
+chamados de canais com _buffer_ (_"buffered channel"_)  e canais com capacidade
+interna $0$ são denominados de canais sem _buffer_ ou _rendez-vous_ (do francês,
+ponto de encontro).
+
+Quando uma mensagem $x$ é adicionada a um canal $k$ por uma thread utilizando #send$(k, x)$,
+ela é adicionada a uma fila interna do canal, de capacidade $n_k$. Esta mensagem
+pode posteriormente ser removida da fila utilizando #recv$(k)$, em ordenação
+#fifo (mensagens enviadas mais cedo ao canal são removidas
+mais cedo). Se uma thread tenta executar
+#send em um canal $k$ que já está cheio (ou seja, já existem $n_k$
+mensagens no canal), então a operação #send irá parar a thread executando
+#send e esperar até que outra thread execute #recv no canal.
+De maneira similar, se o canal está vazio e uma thread executa #recv, esta
+irá esperar até que outra thread execute #send.
+
+Um aspecto importante de canais, é que mesmo um canal $k$ de capacidade $n_k = 0$ pode
+ser utilizado com sucesso. Neste caso, toda operação #recv suspende a thread
+que a chama, até que uma outra thread envie um valor no canal por meio de #send.
+Analogamente, toda operação #send, para terminar, precisa que outra thread execute #recv.
+Mesmo neste caso, canais continuam obedecendo a ordenação #fifo,
+se duas threads executam #send, e uma terceira executa #recv, a thread enviadora
+liberada será a thread que executou #send primeiro.
+
+Ao executar #close em um canal $k$, este canal se torna um canal fechado (para envios).
+A operação #send falha em canais fechados, mas é possível executar #recv em um canal fechado
+para envios, se este canal possui capacidade $n_k > 0$ e ainda há mensagens na lista interna do canal.
+Se #recv é executado em um canal fechado sem mensagens internas (caso também implicado por $n_k = 0$),
+a operação falha, já que não há mensagens nele, e não há mais ninguém que possa
+enviar mensagens a ele.
+
+O modelo também costuma providenciar uma operação #smallcaps("Select")$(k_1, ..., k_m)$
+que permite a uma thread executar #recv em vários canais simultâneamente, até que alguma
+mensagem venha qualquer um deles.
+
+A ideia original para a implementação de comunicação entre jobs em nushell,
+era baseada nesse modelo. Seria adicionado um tipo novo, canal, e operações
+novas para manipular este tipo, `channel make` seria usadno para criar
+canais, `channel send` permitiria o uso da operação #send, `channel recv` permitiria
+o uso da operação #recv, e channel select permitiria o uso de #smallcaps("Select").
+Um dos fatores que facilitaria a implementação deste modelo, é o fato da biblioteca
+padrão de  Rust, a linguagem de implementação de nushell,
+providenciar canais no modelo CSP.
+
+Entretanto, este modelo foi rejeitado, pois introduz valores mutáveis à linguagem,
+e permitem a criação de ciclos de referência, que dificultam a dealocação
+automática de memória não utilizada. Por exemplo, imagine que dois canais,
+$k_1$ e $k_2$ são criados, ambos com capacidade $2$. No canal $k_1$ são enviadas
+a string `"one"` e depois o própio canal $k_2$, e
+no canal $k_2$ são enviadas a string `"two"`, e o própio canal $k_1$. Nesta situação,
+o canal $k_1$ internalmente possui uma referência para o canal $k_2$, e o $k_2$ para o
+$k_1$. Neste exemplo, mesmo que em nenhum outro lugar da aplicação os valores $k_1$ ou $k_2$
+sejam usados ou referenciados, ainda existirão referências a estes valores, e um algorítmo
+simples baseado em contagem de referências ativas não mais pode determinar se um valor realmente
+está sendo utilizado ou não.
+
+// TODO: incluir diagrama de canais apontando um para o outro
 
 #figure([
-```bash
-let msgs = channel make
+  ```bash
+  let k1 = channel make --buffer-size=1
+  let k2 = channel make --buffer-size=2
 
-job spawn {
-  sleep (random int 1..3 | into duration --unit sec)
-  1 | channel send $msgs
-}
+  "one" | job send $k1
+  $k2 | job send $k1
 
-job spawn {
-  sleep (random int 1..3 | into duration --unit sec)
-  2 | channel send $msgs
-}
+  "two" | job send $k2
+  $k1 | job send $k2
+  ```
+])
 
-job spawn {
-  sleep (random int 1..3 | into duration --unit sec)
-  3 | channel send $msgs
-}
+Existem algorítmos capazes de lidar com este tipo de situação, chamados de
+_Garbage Collectors_ (do inglês, coletores de lixo), mas o projeto atualmente
+não implementa nenhuma técnica para lidar com ciclos de referência, pois estes
+são atualmente impossíveis na linguagem, uma vez que todos os valores são imutáveis.
+Atualmente, uma simples estratégia de contagem de referências ativas é utilizada, por meio
+do tipo `Arc` de Rust.
 
-let first = channel recv $msgs
-let second = channel recv $msgs
-let third = channel recv $msgs
-```
-]).
+Introduzir CSP na linguagem exigiria ou introduzir um _Garbage Collector_, que foge
+do escopo deste trabalho, ou exigiria impedir usuários de enviar em canais,
+valores referenciando outros canais, o que limitaria consideravelmente a usabilidade
+deste recurso, e traria penalidades adicionais de tempo de execução, para
+garantir que os valores enviados não contenham outros canais.
+
+=== Comunicação direta e modelo de atores
+
+Um outro modelo de comunicação entre threads, é o de modelo de comunicação
+direta (MCD), popularizado pela linguagem de progração Erlang e o modelo de atores.
+No MCD, as threads podem ser identificadas por
+por valores denominados endereços
+#footnote([No caso do nushell, os endereços das threads são os IDs do jobs])
+, e podem enviar mensagens diretamente a
+outras threads por seus endereços, usando operações similares
+a #send e #recv do CSP.
+
+#let sendd = smallcaps("SendDirect")
+#let recvd = smallcaps("RecvDirect")
+
+Neste modelo, a operação #sendd$(a, x)$ recebe o
+endereço $a$ de uma thread e um valor $x$, e envia este valor à thread.
+A operação #sendd nunca bloqueia a thread que a executou, de modo similar a
+#send em um canal de $n_k = infinity$. A operação #recvd recebe mensagens enviadas
+por #sendd, em ordenação #fifo, ou bloqueia a thread $t$, até que outra a envie
+uma mensagem no endereço de $t$ com #sendd.
+
+Este foi o modelo adotado no projeto, e foi implementado internalmente utilizando
+os recursos de CSP providenciados por Rust. Para cada tarefa, é criado um canal
+com $n = infinity$, e a tabela compartilhada de tarefas mantém uma referência
+ao canal de todas as tarefas, indexados pelos endereços/IDs.
+Assim `job send` -- que implementa #sendd -- pode acessar o canal de outra tarefa e enviar a mensagem
+utilizando #send. Para ler mensagens, o
+comando `job recv` acessa o canal associado à tarefa atual, e executa
+a operaçào #recv nele. Este modelo não introduz os problemas de mutabilidade
+apresentados pela introdução de CSP ao nushell, pois os canais associados
+às tarefas são destruídos quando estas tarefas são terminadas, e `job send`
+em endereços de tarefas já terminadas passa a reportar um erro.
 
 
-
-
-/*
-
-[X] Spawn de jobs:
-[X] Falar de closures, da struct EngineState, comandos experimentais, e do comando `job spawn`.
-[X] Falar da tabela de jobs, salva por um mutex compartilhado entre as `EngineState`s, falar do modelo de exclusão de acesso da linguagem Rust.
-[X] Falar de como o id do primeiro job é o zero.
-
-. Assasinato de jobs
-[X] Falar do algorítmo de matagem de jobs implementado, qual a brincadeira de lock unlock, falar do model acquire-relesase e da issue de rust
-que falta da falta da documentação desse detalhe.
-
-. TSTP e Ctrl-Z
-Falar do manual da GNU que eu li, quais syscalls foram usadas, UnfreezeHandle etc.
-Falar de process groups, e do commit (per-pipelines)[https://github.com/nushell/nushell/pull/14883/commits/267b092c7954b2100df0fdab3b6ef9668aeee240].
-
-. Saída do program e aviso na saída
-Falar de como foi implementado o esquema de avisar o usuário se ele tentar sair do shell enquanto tem algum job na tabela.
-Falar de como o programa se comporta quando o shell termina e ainda tem jobs rodando (matar ou não matar os processos?)
-Falar de como o programa não mostra a saída dos procesoss por padrão, mas ainda permite que comandos que explicitamente printam coisas na tela funcionem (print).
-
-. Alterações que sairam de escopo
-Falar da ideia do `job dispatch`, de como ele é mais ou menos desncessário (job spawn meio que serve)
-
-== Pull Request  \#15253 - "Inter-Job Direct Messaging"
-
-// Falar bla bla bla detalhes Erlang.
-
-*/
-
-// TODO: falar do lance de sair do shell mostrar uma mensagem de aviso.
-// 
 #pagebreak()
 = Capitulo 4 \ Impacto
 
@@ -1104,7 +1185,7 @@ terminadas as PRs. ]
 
 == Uso em repositórios públicos
 
-A plataforma Github possui uma #link("")[ferramenta de busca] que permite a busca de textos
+A plataforma Github possui uma #link("https://github.com/search?q=path%3A*.nu%20%22job%20spawn%22&type=code")[ferramenta de busca] que permite a busca de textos
 em repositórios públicos. Com isso, podemos procurar instâncias de uso do termo `job spawn`
 em arquivos nushell. Realizando uma busca por arquivos de extensão `.nu` (de scripts nushell), que contém o termo `job spawn`,
 obtemos 113 arquivos, de múltiplos usuários diferentes.
@@ -1132,5 +1213,7 @@ para diversos propósitos.
 
 == Planos futuros
 
-
+TODO: Detalhar esta parte
+- Implementar recursos adicionais que os usuários sugeriram (olhar categoria job-control de issues no nushell)
+- Resolver bugs que usuários encontraram
 
