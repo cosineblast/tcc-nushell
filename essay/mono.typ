@@ -93,7 +93,7 @@ em Linux e MacOS.
     
   ],
   keywords: [
-  *Palavras chave*: Shell, Tarefas em Segundo plano.
+  *Palavras chave*: Shell, Tarefas em segundo plano.
   ]
 )
 
@@ -113,17 +113,13 @@ Renan Ribeiro Marcelino. *Implementing background jobs in a modern shell*. Capst
 ],
   description: [
 
-Nushell is a modern open source shell aimed to provide a friendly multiplatform experience.
-This shell employs structured in its commands, allowing data to be manipulated 
-with appropriate data types, without the need for textual conversion in order to compose operations, like it occurs with
-in POSIX shells such as `bash` and `zsh`.
+Nushell is a modern, open-source shell developed with the goal of providing a friendly, cross-platform experience.
 
-Ever since its inception in 2019, the project has been requested to implement background tasks and process suspension, features commonly found in POSIX shells.
+This shell adopts the use of structured data in its commands, allowing data to be manipulated according to its appropriate types, without the need for text conversions to compose operations, as occurs in POSIX shells like bash and zsh.
 
-This project consists in the implementation, documentation and integration of a background job infrastructure in nushell
-On top of multithreading, background jobs and process suspension, Erlang-style message passing was also implemented.
-//TODO: Update this description to match the portuguese one.
-  ],
+Since its creation in 2019, the project has received requests for support for background jobs and process suspension, features common in POSIX shells.
+
+This undergraduate thesis project consists of the implementation and documentation of a background job infrastructure in the Nushell project. In addition to background jobs via multithreading and process suspension, a thread communication system inspired by the model implemented by the Erlang programming language was also implemented. In total, ten new commands were added to the shell, along with improvements to the project's behavior on Linux and macOS.  ],
   keywords: [
   *Keywords*: Shell, Background jobs.
   ]
