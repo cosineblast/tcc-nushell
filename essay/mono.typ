@@ -81,7 +81,7 @@ Instituto de Matemática e Estatística, Universidade de São Paulo, São Paulo,
 Nushell é um shell moderno de código fonte aberto desenvolvido com o objetivo de providenciar uma experiência multiplataforma amigável.
 Este shell adota o uso de dados estruturados em seus comandos, permitindo que dados possam ser manipulados
 de acordo com seus tipos apropriados, sem a necessidade de conversões de texto para a composição de operações, como ocorre em shells
-POSIX como `bash`, `zsh` e `fish`.
+POSIX como `bash` e `zsh`.
 
 Desde sua criação em 2019, o projeto possui solicitações para o suporte à tarefas em segundo plano e suspensão de processos, recursos
 comuns em shells POSIX.
@@ -116,7 +116,7 @@ Renan Ribeiro Marcelino. *Implementing background jobs in a modern shell*. Capst
 Nushell is a modern open source shell aimed to provide a friendly multiplatform experience.
 This shell employs structured in its commands, allowing data to be manipulated 
 with appropriate data types, without the need for textual conversion in order to compose operations, like it occurs with
-in POSIX shells such as `bash`, `zsh` and `fish`.
+in POSIX shells such as `bash` and `zsh`.
 
 Ever since its inception in 2019, the project has been requested to implement background tasks and process suspension, features commonly found in POSIX shells.
 
@@ -579,23 +579,6 @@ todos os processos ativos nela.
 Apesar de não ter sido solicitado originalmente pelos usuários do projeto, este trabalho
 adicionou  capabilidades de comunicação entre tarefas de segundo plano ao projeto nushell.
 
-A ideia inicial era a 
-implementação de comunicação entre threads
-por meio do modelo de interação concorrente
-#link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
-  Communicating Sequantial Processes
-] (CSP), de Tony Hoare,
-que também inspirou o design das linguagens `OCaml`, `Go`, `Rust`, e `Clojure`.
-Neste modelo, seria implementado um tipo de dado mutável denominado 'canal', que poderia
-ser compartilhado entre jobs, do qual o envio de mensagens seria possível por meio de comandos
-como `channel send` e `chanel recv`.
-// TODO: add citation 
-// TODO: should we move this to implementation details?
-
-Entretanto, isto iria introduzir estado local mutável compartilhado na linguagem, o que traria
-complexidades adicionais negativas, como ciclos de referência, e por consequência, garbage collection.
-Por este motivo, outro modelo foi investigado e utilizado.
-
 O modelo de comunicação entre tarefas implementado foi inspirado no da linguagem de programação
 funcional Erlang, inspirado por sua vez no modelo de computação concorrente baseado em
 #link("https://en.wikipedia.org/wiki/Actor_model")[atores].
@@ -1015,6 +998,44 @@ da tarefa apresentado por `job list`.
 ) <job_type>
 
 == Comunicação entre Threads
+
+A ideia original para a implementação de comunicação entre jobs
+era a 
+utilizando o modelo de interação concorrnte
+#link("https://en.wikipedia.org/wiki/Communicating_sequential_processes")[
+  Communicating Sequantial Processes
+] (CSP), de Tony Hoare,
+que também inspirou o design das linguagens `OCaml`, `Go`, `Rust`, e `Clojure`.
+Neste modelo, seria implementado um tipo de dado mutável denominado 'canal', que poderia
+ser compartilhado entre jobs, do qual o envio de mensagens seria possível por meio de comandos
+como `channel send` e `chanel recv`.
+
+#figure([
+```bash
+let msgs = channel make
+
+job spawn {
+  sleep (random int 1..3 | into duration --unit sec)
+  1 | channel send $msgs
+}
+
+job spawn {
+  sleep (random int 1..3 | into duration --unit sec)
+  2 | channel send $msgs
+}
+
+job spawn {
+  sleep (random int 1..3 | into duration --unit sec)
+  3 | channel send $msgs
+}
+
+let first = channel recv $msgs
+let second = channel recv $msgs
+let third = channel recv $msgs
+```
+]).
+
+
 
 
 /*
